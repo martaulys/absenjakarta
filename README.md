@@ -63,3 +63,4 @@ Untuk penggunaan kantor skala kecil-menengah dengan volume terpasang, setup SQLi
 
 - Heuristik fake-GPS bersifat indikatif (bukan bukti mutlak) — hasil "terindikasi" tetap tersimpan di riwayat untuk ditinjau admin, absen tidak diblokir otomatis.
 - Kamera & geolokasi browser memerlukan koneksi HTTPS (atau `localhost`) agar `getUserMedia`/`Geolocation` API berfungsi.
+- Keterangan alamat pada kamera absen menggunakan layanan reverse-geocoding gratis (OpenStreetMap Nominatim) — tanpa API key, tapi bergantung pada ketersediaan layanan pihak ketiga tersebut dan dibatasi ~1 permintaan/detik (cukup untuk pola pemakaian absen normal).

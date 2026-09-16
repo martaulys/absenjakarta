@@ -2,6 +2,7 @@ const state = {
   employee: null,
   capturedBlob: null,
   currentPosition: null,
+  locationAddress: null,
   positions: [],
   locations: [],
   editingEmployeeId: null,
@@ -49,7 +50,7 @@ document.querySelectorAll('.toggle-password').forEach((btn) => {
     if (!input) return;
     const isHidden = input.type === 'password';
     input.type = isHidden ? 'text' : 'password';
-    btn.textContent = isHidden ? '\u{1F648}' : '\u{1F441}️';
+    btn.textContent = isHidden ? 'Sembunyikan' : 'Lihat';
   };
 });
 
@@ -166,6 +167,8 @@ function startClock() {
 
 // ---------------- CAMERA ----------------
 let mediaStream = null;
+let cameraOverlayInterval = null;
+
 document.getElementById('btn-start-camera').onclick = async () => {
   try {
     mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
@@ -175,18 +178,66 @@ document.getElementById('btn-start-camera').onclick = async () => {
     document.getElementById('captured-photo').classList.add('hidden');
     document.getElementById('btn-start-camera').classList.add('hidden');
     document.getElementById('btn-capture').classList.remove('hidden');
+    document.getElementById('camera-location-overlay').classList.remove('hidden');
+    startCameraOverlayClock();
     requestLocation();
   } catch (err) {
     toast('Tidak bisa mengakses kamera: ' + err.message, true);
   }
 };
 
+function startCameraOverlayClock() {
+  if (cameraOverlayInterval) return;
+  const tick = () => {
+    const el = document.getElementById('camera-datetime');
+    if (el) {
+      el.textContent = new Intl.DateTimeFormat('id-ID', {
+        timeZone: 'Asia/Jakarta',
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      }).format(new Date());
+    }
+  };
+  tick();
+  cameraOverlayInterval = setInterval(tick, 1000);
+}
+
+function stopCameraOverlayClock() {
+  if (cameraOverlayInterval) {
+    clearInterval(cameraOverlayInterval);
+    cameraOverlayInterval = null;
+  }
+}
+
+async function reverseGeocode(lat, lng) {
+  const addressEl = document.getElementById('camera-address-line');
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+      { headers: { Accept: 'application/json' } }
+    );
+    const data = await res.json();
+    state.locationAddress = data.display_name || null;
+  } catch {
+    state.locationAddress = null;
+  }
+  if (addressEl) addressEl.textContent = state.locationAddress || 'Alamat tidak dapat dideteksi';
+}
+
 document.getElementById('btn-capture').onclick = () => {
   const video = document.getElementById('camera-preview');
   const canvas = document.getElementById('camera-canvas');
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
-  canvas.getContext('2d').drawImage(video, 0, 0);
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0);
+  drawLocationStampOnCanvas(ctx, canvas.width, canvas.height);
   canvas.toBlob((blob) => {
     state.capturedBlob = blob;
     const img = document.getElementById('captured-photo');
@@ -198,6 +249,28 @@ document.getElementById('btn-capture').onclick = () => {
     updateAbsenButtonsState();
   }, 'image/jpeg', 0.9);
 };
+
+function drawLocationStampOnCanvas(ctx, width, height) {
+  const dateTimeText = document.getElementById('camera-datetime').textContent;
+  const coordsText = document.getElementById('camera-coords').textContent;
+  const addressText = document.getElementById('camera-address-line').textContent;
+
+  const padding = Math.round(width * 0.02);
+  const fontSize = Math.max(12, Math.round(width * 0.032));
+  const lineHeight = fontSize * 1.35;
+  const barHeight = lineHeight * 2 + padding * 2;
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+  ctx.fillRect(0, height - barHeight, width, barHeight);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.textBaseline = 'top';
+  ctx.font = `600 ${fontSize}px Arial, sans-serif`;
+  ctx.fillText(addressText, padding, height - barHeight + padding, width - padding * 2);
+
+  ctx.font = `${fontSize * 0.85}px Arial, sans-serif`;
+  ctx.fillText(`${coordsText}   ${dateTimeText}`, padding, height - barHeight + padding + lineHeight, width - padding * 2);
+}
 
 document.getElementById('btn-retake').onclick = () => {
   state.capturedBlob = null;
@@ -232,6 +305,9 @@ function requestLocation() {
       state.currentPosition = pos.coords;
       statusEl.textContent = `Lokasi terdeteksi (akurasi ±${Math.round(pos.coords.accuracy)}m)`;
       statusEl.className = 'location-status ok';
+      const coordsEl = document.getElementById('camera-coords');
+      if (coordsEl) coordsEl.textContent = `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`;
+      reverseGeocode(pos.coords.latitude, pos.coords.longitude);
       updateAbsenButtonsState();
     },
     (err) => {
@@ -276,12 +352,17 @@ document.getElementById('btn-absen-pulang').onclick = () => submitAbsen('pulang'
 function resetAbsenForm() {
   state.capturedBlob = null;
   state.currentPosition = null;
+  state.locationAddress = null;
   document.getElementById('absen-note').value = '';
   document.getElementById('captured-photo').classList.add('hidden');
   document.getElementById('btn-retake').classList.add('hidden');
   document.getElementById('btn-start-camera').classList.remove('hidden');
   document.getElementById('location-status').textContent = 'Lokasi belum terdeteksi';
   document.getElementById('location-status').className = 'location-status';
+  document.getElementById('camera-location-overlay').classList.add('hidden');
+  document.getElementById('camera-address-line').textContent = 'Mendeteksi lokasi...';
+  document.getElementById('camera-coords').textContent = '';
+  stopCameraOverlayClock();
   if (mediaStream) mediaStream.getTracks().forEach((t) => t.stop());
   updateAbsenButtonsState();
 }
@@ -344,6 +425,14 @@ function loadProfile() {
   document.getElementById('profile-nik').value = emp.nik || '-';
   document.getElementById('profile-position').value = emp.positionName || '-';
   document.getElementById('profile-location').value = emp.locationName || '-';
+  document.getElementById('profile-join-date').value = formatDateID(emp.joinDate);
+}
+
+function formatDateID(isoDate) {
+  if (!isoDate) return '-';
+  const d = new Date(isoDate + 'T00:00:00');
+  if (Number.isNaN(d.getTime())) return isoDate;
+  return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(d);
 }
 
 document.getElementById('form-change-password').onsubmit = async (e) => {
@@ -453,6 +542,8 @@ async function loadAdminRefData() {
   posSelect.innerHTML = positions.map((p) => `<option value="${p.id}">${p.name}</option>`).join('');
   const admPosSelect = document.getElementById('adm-profile-position');
   admPosSelect.innerHTML = positions.map((p) => `<option value="${p.id}">${p.name}</option>`).join('');
+  const admLocSelect = document.getElementById('adm-profile-location');
+  admLocSelect.innerHTML = locations.map((l) => `<option value="${l.id}">${l.name}</option>`).join('');
 }
 
 async function loadEmployees() {
@@ -649,6 +740,8 @@ function loadAdminProfile() {
   document.getElementById('adm-profile-email').value = emp.email || '';
   document.getElementById('adm-profile-nik').value = emp.nik || '';
   if (emp.positionId) document.getElementById('adm-profile-position').value = emp.positionId;
+  if (emp.locationId) document.getElementById('adm-profile-location').value = emp.locationId;
+  document.getElementById('adm-profile-join-date').value = formatDateID(emp.joinDate);
 }
 
 document.getElementById('form-admin-profile').onsubmit = async (e) => {
@@ -658,14 +751,16 @@ document.getElementById('form-admin-profile').onsubmit = async (e) => {
     const email = document.getElementById('adm-profile-email').value;
     const nik = document.getElementById('adm-profile-nik').value;
     const positionId = document.getElementById('adm-profile-position').value;
+    const locationId = document.getElementById('adm-profile-location').value;
     await api(`/admin/employees/${state.employee.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ name, email, nik, positionId }),
+      body: JSON.stringify({ name, email, nik, positionId, locationId }),
     });
     state.employee.name = name;
     state.employee.email = email;
     state.employee.nik = nik;
     state.employee.positionId = positionId;
+    state.employee.locationId = locationId;
     document.getElementById('admin-name').textContent = name;
     toast('Data diri berhasil diperbarui');
   } catch (err) {

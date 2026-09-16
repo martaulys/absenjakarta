@@ -22,7 +22,7 @@
       <label>Password</label>
       <div class="password-field">
         <input type="password" id="login-password" required autocomplete="current-password" />
-        <button type="button" class="toggle-password" data-target="login-password">&#128065;</button>
+        <button type="button" class="toggle-password" data-target="login-password">Lihat</button>
       </div>
       <p id="login-error" class="field-error hidden"></p>
       <button type="submit">Masuk</button>
@@ -42,12 +42,12 @@
       <label>Password Baru</label>
       <div class="password-field">
         <input type="password" id="forgot-password" required />
-        <button type="button" class="toggle-password" data-target="forgot-password">&#128065;</button>
+        <button type="button" class="toggle-password" data-target="forgot-password">Lihat</button>
       </div>
       <label>Ulangi Password Baru</label>
       <div class="password-field">
         <input type="password" id="forgot-password-confirm" required />
-        <button type="button" class="toggle-password" data-target="forgot-password-confirm">&#128065;</button>
+        <button type="button" class="toggle-password" data-target="forgot-password-confirm">Lihat</button>
       </div>
       <p id="forgot-error" class="field-error hidden"></p>
       <button type="submit">Reset Password</button>
@@ -80,6 +80,13 @@
         <video id="camera-preview" autoplay playsinline></video>
         <canvas id="camera-canvas" class="hidden"></canvas>
         <img id="captured-photo" class="hidden" alt="Foto absen" />
+        <div id="camera-location-overlay" class="camera-location-overlay hidden">
+          <div id="camera-address-line" class="camera-address-line">Mendeteksi lokasi...</div>
+          <div class="camera-meta-row">
+            <span id="camera-coords"></span>
+            <span id="camera-datetime"></span>
+          </div>
+        </div>
       </div>
       <div class="camera-actions">
         <button type="button" id="btn-start-camera">Aktifkan Kamera</button>
@@ -145,6 +152,7 @@
       <label>NIK</label><input type="text" id="profile-nik" disabled />
       <label>Jabatan</label><input type="text" id="profile-position" disabled />
       <label>Lokasi</label><input type="text" id="profile-location" disabled />
+      <label>Tanggal Masuk</label><input type="text" id="profile-join-date" disabled />
     </div>
     <div class="card">
       <h2>Ubah Password</h2>
@@ -152,12 +160,12 @@
         <label>Password Saat Ini</label>
         <div class="password-field">
           <input type="password" id="cp-current" required />
-          <button type="button" class="toggle-password" data-target="cp-current">&#128065;</button>
+          <button type="button" class="toggle-password" data-target="cp-current">Lihat</button>
         </div>
         <label>Password Baru</label>
         <div class="password-field">
           <input type="password" id="cp-new" required />
-          <button type="button" class="toggle-password" data-target="cp-new">&#128065;</button>
+          <button type="button" class="toggle-password" data-target="cp-new">Lihat</button>
         </div>
         <p id="cp-error" class="field-error hidden"></p>
         <button type="submit" class="btn-primary">Ubah Password</button>
@@ -241,7 +249,7 @@
         <label>Password <span id="emp-password-hint">(wajib untuk karyawan baru)</span></label>
         <div class="password-field">
           <input type="password" id="emp-form-password" />
-          <button type="button" class="toggle-password" data-target="emp-form-password">&#128065;</button>
+          <button type="button" class="toggle-password" data-target="emp-form-password">Lihat</button>
         </div>
         <label>Role</label>
         <select id="emp-form-role"><option value="employee">Karyawan</option><option value="admin">Admin</option></select>
@@ -307,6 +315,9 @@
         <label>NIK</label><input type="text" id="adm-profile-nik" />
         <label>Jabatan</label>
         <select id="adm-profile-position"></select>
+        <label>Lokasi</label>
+        <select id="adm-profile-location"></select>
+        <label>Tanggal Masuk</label><input type="text" id="adm-profile-join-date" disabled />
         <button type="submit" class="btn-primary">Simpan Perubahan</button>
       </form>
     </div>
@@ -316,12 +327,12 @@
         <label>Password Saat Ini</label>
         <div class="password-field">
           <input type="password" id="adm-cp-current" required />
-          <button type="button" class="toggle-password" data-target="adm-cp-current">&#128065;</button>
+          <button type="button" class="toggle-password" data-target="adm-cp-current">Lihat</button>
         </div>
         <label>Password Baru</label>
         <div class="password-field">
           <input type="password" id="adm-cp-new" required />
-          <button type="button" class="toggle-password" data-target="adm-cp-new">&#128065;</button>
+          <button type="button" class="toggle-password" data-target="adm-cp-new">Lihat</button>
         </div>
         <p id="adm-cp-error" class="field-error hidden"></p>
         <button type="submit" class="btn-primary">Ubah Password</button>

@@ -21,6 +21,7 @@ function publicEmployee(emp) {
     locationName: emp.location_name || null,
     photoPath: emp.photo_path,
     active: !!emp.active,
+    joinDate: emp.created_at ? emp.created_at.split(' ')[0] : null,
   };
 }
 

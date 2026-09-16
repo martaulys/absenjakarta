@@ -85,7 +85,7 @@ router.post('/employees', upload.single('photo'), (req, res) => {
 });
 
 router.put('/employees/:id', upload.single('photo'), (req, res) => {
-  const { nik, name, email, role, positionId, password } = req.body;
+  const { nik, name, email, role, positionId, locationId, password } = req.body;
   const existing = db.prepare('SELECT * FROM employees WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Karyawan tidak ditemukan' });
 
@@ -93,7 +93,7 @@ router.put('/employees/:id', upload.single('photo'), (req, res) => {
   const passwordHash = password ? bcrypt.hashSync(password, 10) : existing.password_hash;
 
   db.prepare(
-    `UPDATE employees SET nik = ?, name = ?, email = ?, role = ?, position_id = ?, photo_path = ?, password_hash = ?
+    `UPDATE employees SET nik = ?, name = ?, email = ?, role = ?, position_id = ?, location_id = ?, photo_path = ?, password_hash = ?
      WHERE id = ?`
   ).run(
     nik || null,
@@ -101,6 +101,7 @@ router.put('/employees/:id', upload.single('photo'), (req, res) => {
     (email || existing.email).toLowerCase().trim(),
     role || existing.role,
     positionId || null,
+    locationId !== undefined ? locationId || null : existing.location_id,
     photoPath,
     passwordHash,
     req.params.id
