@@ -664,7 +664,8 @@ document.getElementById('btn-cancel-employee').onclick = () => {
   document.getElementById('employee-form-card').classList.add('hidden');
 };
 
-function openEmployeeForm(emp) {
+async function openEmployeeForm(emp) {
+  await loadAdminRefData(); // pastikan daftar jabatan/lokasi terbaru sebelum form dibuka
   state.editingEmployeeId = emp ? emp.id : null;
   document.getElementById('employee-form-title').textContent = emp ? 'Edit Karyawan' : 'Tambah Karyawan';
   document.getElementById('emp-password-hint').textContent = emp ? '(kosongkan jika tidak diubah)' : '(wajib untuk karyawan baru)';
