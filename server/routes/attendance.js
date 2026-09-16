@@ -40,9 +40,7 @@ router.post('/check-in', requireAuth, upload.single('photo'), (req, res) => {
     }
 
     const emp = db.prepare('SELECT * FROM employees WHERE id = ?').get(req.session.employeeId);
-    const location = emp.location_id
-      ? db.prepare('SELECT * FROM locations WHERE id = ?').get(emp.location_id)
-      : null;
+    const locations = db.prepare('SELECT * FROM locations').all();
     const lastAttendance = db
       .prepare('SELECT * FROM attendance WHERE employee_id = ? ORDER BY timestamp DESC LIMIT 1')
       .get(emp.id);
@@ -55,7 +53,7 @@ router.post('/check-in', requireAuth, upload.single('photo'), (req, res) => {
       lat: parsedLat,
       lng: parsedLng,
       accuracy: parsedAccuracy,
-      location,
+      locations,
       lastAttendance,
     });
 

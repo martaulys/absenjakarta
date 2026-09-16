@@ -88,12 +88,9 @@ if (positionCount === 0) {
 
 const locationCount = db.prepare('SELECT COUNT(*) AS c FROM locations').get().c;
 if (locationCount === 0) {
-  db.prepare('INSERT INTO locations (name, lat, lng, radius_meters) VALUES (?, ?, ?, ?)').run(
-    'Kantor Pusat Jakarta',
-    -6.2088,
-    106.8456,
-    150
-  );
+  const insertLoc = db.prepare('INSERT INTO locations (name, lat, lng, radius_meters) VALUES (?, ?, ?, ?)');
+  insertLoc.run('Kantor Jakarta', -6.2088, 106.8456, 150);
+  insertLoc.run('Kantor Bandung', -6.8967, 107.6168, 150);
 }
 
 const adminEmail = process.env.ADMIN_DEFAULT_EMAIL || 'hcm@tritronik.com';

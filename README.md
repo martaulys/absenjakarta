@@ -35,7 +35,8 @@ Akun admin default dibuat otomatis saat pertama kali dijalankan (jika belum ada 
 
 - Login karyawan per akun (email + password), dengan akun admin khusus
 - Absen masuk/pulang: foto langsung dari kamera (wajib), deteksi lokasi GPS, catatan wajib
-- Heuristik deteksi indikasi fake GPS: akurasi GPS rendah/tidak ada, lompatan lokasi tidak wajar antar absen, di luar radius lokasi kantor terdaftar
+- Multi-lokasi kantor (mis. Jakarta & Bandung) — saat absen, sistem mencari lokasi kantor **terdekat** dari seluruh daftar di Kelola Lokasi, bukan hanya satu lokasi yang di-assign ke karyawan
+- Heuristik deteksi indikasi fake GPS: akurasi GPS rendah/tidak ada, lompatan lokasi tidak wajar antar absen, di luar radius lokasi kantor terdekat yang terdaftar — hasil "terindikasi" langsung terlihat admin di Riwayat Absensi, Ringkasan, dan export Excel
 - Pengajuan izin/sakit dengan rentang tanggal dan unggah bukti (surat sakit/acc atasan)
 - Reset password mandiri ("Lupa password?") dengan aturan minimal 8 karakter + huruf kapital + angka, tercatat di log aktivitas admin
 - Dashboard admin: ringkasan, riwayat absensi (filter tanggal), kelola karyawan (tambah/edit/nonaktifkan dengan tanggal keluar), kelola lokasi kantor, kelola jabatan, log aktivitas
