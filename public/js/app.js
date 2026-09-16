@@ -34,7 +34,7 @@ function showView(id) {
 function showFieldError(id, msg) {
   const el = document.getElementById(id);
   if (!el) return;
-  el.textContent = msg;
+  if (msg) el.textContent = msg;
   el.classList.remove('hidden');
 }
 function hideFieldError(id) {
@@ -43,14 +43,38 @@ function hideFieldError(id) {
   el.classList.add('hidden');
 }
 
-// ---------------- PASSWORD VISIBILITY TOGGLE ----------------
+// ---------------- PASSWORD RULE VALIDATION ----------------
+const PASSWORD_RULE = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
+
+function isPasswordValid(password) {
+  return PASSWORD_RULE.test(password);
+}
+
+// Wire live validation + eye-icon toggle for every "password baru" field that has a matching *-rule-error element
+document.querySelectorAll('.password-field input[type="password"]').forEach((input) => {
+  const ruleErrorEl = document.getElementById(input.id + '-rule-error');
+  if (ruleErrorEl) {
+    input.addEventListener('input', () => {
+      if (!input.value) return hideFieldError(ruleErrorEl.id);
+      if (isPasswordValid(input.value)) hideFieldError(ruleErrorEl.id);
+      else showFieldError(ruleErrorEl.id);
+    });
+  }
+});
+
+const ICON_EYE =
+  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
+const ICON_EYE_OFF =
+  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>';
+
 document.querySelectorAll('.toggle-password').forEach((btn) => {
+  btn.innerHTML = ICON_EYE;
   btn.onclick = () => {
     const input = document.getElementById(btn.dataset.target);
     if (!input) return;
-    const isHidden = input.type === 'password';
-    input.type = isHidden ? 'text' : 'password';
-    btn.textContent = isHidden ? 'Sembunyikan' : 'Lihat';
+    const nowVisible = input.type === 'password';
+    input.type = nowVisible ? 'text' : 'password';
+    btn.innerHTML = nowVisible ? ICON_EYE_OFF : ICON_EYE;
   };
 });
 
@@ -79,6 +103,9 @@ document.getElementById('form-forgot').onsubmit = async (e) => {
     const email = document.getElementById('forgot-email').value;
     const newPassword = document.getElementById('forgot-password').value;
     const confirmPassword = document.getElementById('forgot-password-confirm').value;
+    if (!isPasswordValid(newPassword)) {
+      return showFieldError('forgot-password-rule-error');
+    }
     if (newPassword !== confirmPassword) {
       return showFieldError('forgot-error', 'Password baru dan ulangi password tidak sama');
     }
@@ -441,6 +468,9 @@ document.getElementById('form-change-password').onsubmit = async (e) => {
   try {
     const currentPassword = document.getElementById('cp-current').value;
     const newPassword = document.getElementById('cp-new').value;
+    if (!isPasswordValid(newPassword)) {
+      return showFieldError('cp-new-rule-error');
+    }
     await api('/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
     toast('Password berhasil diubah');
     e.target.reset();
@@ -621,14 +651,18 @@ function openEmployeeForm(emp) {
 
 document.getElementById('form-employee').onsubmit = async (e) => {
   e.preventDefault();
+  hideFieldError('emp-form-password-rule-error');
   try {
+    const password = document.getElementById('emp-form-password').value;
+    if (password && !isPasswordValid(password)) {
+      return showFieldError('emp-form-password-rule-error');
+    }
     const fd = new FormData();
     fd.append('name', document.getElementById('emp-form-name').value);
     fd.append('email', document.getElementById('emp-form-email').value);
     fd.append('nik', document.getElementById('emp-form-nik').value);
     fd.append('role', document.getElementById('emp-form-role').value);
     fd.append('positionId', document.getElementById('emp-form-position').value);
-    const password = document.getElementById('emp-form-password').value;
     if (password) fd.append('password', password);
     const photoFile = document.getElementById('emp-form-photo').files[0];
     if (photoFile) fd.append('photo', photoFile);
@@ -774,6 +808,9 @@ document.getElementById('form-adm-change-password').onsubmit = async (e) => {
   try {
     const currentPassword = document.getElementById('adm-cp-current').value;
     const newPassword = document.getElementById('adm-cp-new').value;
+    if (!isPasswordValid(newPassword)) {
+      return showFieldError('adm-cp-new-rule-error');
+    }
     await api('/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
     toast('Password berhasil diubah');
     e.target.reset();
