@@ -140,13 +140,18 @@ router.post('/employees/import', excelUpload.single('file'), async (req, res) =>
     workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(req.file.buffer);
   } catch (err) {
-    return res.status(400).json({ error: 'File Excel tidak valid atau rusak' });
+    return res.status(400).json({ error: 'File Excel tidak valid atau rusak: ' + err.message });
   }
 
-  const karyawanSheet = workbook.getWorksheet('Karyawan');
-  const jabatanSheet = workbook.getWorksheet('Jabatan');
+  const sheetNames = workbook.worksheets.map((ws) => ws.name);
+  const karyawanSheet = workbook.getWorksheet('Karyawan') || workbook.worksheets.find((ws) => ws.name.trim() === 'Karyawan');
+  const jabatanSheet = workbook.getWorksheet('Jabatan') || workbook.worksheets.find((ws) => ws.name.trim() === 'Jabatan');
   if (!karyawanSheet) {
-    return res.status(400).json({ error: 'Sheet "Karyawan" tidak ditemukan dalam file' });
+    return res.status(400).json({
+      error: 'Sheet "Karyawan" tidak ditemukan dalam file',
+      debugSheetNames: sheetNames,
+      debugFileSize: req.file.buffer.length,
+    });
   }
 
   // 1) Pastikan semua jabatan dari sheet Jabatan tersedia (tidak menghapus jabatan yang sudah ada)
@@ -191,7 +196,17 @@ router.post('/employees/import', excelUpload.single('file'), async (req, res) =>
       let positionId = null;
       if (jabatan) {
         positionId = positionIdByName[jabatan] || null;
-        if (!positionId) unknownPositions.add(jabatan);
+        if (!positionId) {
+          if (jabatanSheet) {
+            // Sheet Jabatan ada -> jabatan di luar daftar resmi dianggap tidak dikenal, tidak dibuat otomatis
+            unknownPositions.add(jabatan);
+          } else {
+            // Tidak ada sheet Jabatan -> buat otomatis dari nilai kolom Jabatan di sheet Karyawan
+            const result = db.prepare('INSERT INTO positions (name) VALUES (?)').run(jabatan);
+            positionId = result.lastInsertRowid;
+            positionIdByName[jabatan] = positionId;
+          }
+        }
       }
 
       const existing = db.prepare('SELECT id, role FROM employees WHERE email = ?').get(email);
@@ -236,6 +251,8 @@ router.post('/employees/import', excelUpload.single('file'), async (req, res) =>
     skippedAdmins,
     unknownPositions: Array.from(unknownPositions),
     errors,
+    debugSheetNames: sheetNames,
+    debugJabatanSheetFound: !!jabatanSheet,
   });
 });
 
