@@ -1,0 +1,14 @@
+node_modules/
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/sessions/
+server/uploads/attendance/*
+server/uploads/profile/*
+server/uploads/proof/*
+!server/uploads/attendance/.gitkeep
+!server/uploads/profile/.gitkeep
+!server/uploads/proof/.gitkeep
+.env
+.env.*
+npm-debug.log*

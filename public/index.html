@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Absen Lokasi Jakarta — Tritronik</title>
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+<div id="toast" class="toast hidden"></div>
+
+<!-- LOGIN -->
+<section id="view-login" class="view">
+  <div class="auth-card">
+    <img src="/img/logo.svg" alt="Logo Tritronik" class="auth-logo" />
+    <h1>Absen Lokasi Jakarta</h1>
+    <p class="subtitle">Tritronik — Sistem Absensi Karyawan</p>
+    <form id="form-login">
+      <label>Email</label>
+      <input type="email" id="login-email" required autocomplete="username" />
+      <label>Password</label>
+      <div class="password-field">
+        <input type="password" id="login-password" required autocomplete="current-password" />
+        <button type="button" class="toggle-password" data-target="login-password">&#128065;</button>
+      </div>
+      <p id="login-error" class="field-error hidden"></p>
+      <button type="submit">Masuk</button>
+    </form>
+    <button class="link-btn" id="btn-show-forgot">Lupa password?</button>
+  </div>
+</section>
+
+<!-- FORGOT PASSWORD -->
+<section id="view-forgot" class="view hidden">
+  <div class="auth-card">
+    <h1>Reset Password</h1>
+    <p class="subtitle">Minimal 8 karakter, ada huruf kapital &amp; angka</p>
+    <form id="form-forgot">
+      <label>Email</label>
+      <input type="email" id="forgot-email" required />
+      <label>Password Baru</label>
+      <div class="password-field">
+        <input type="password" id="forgot-password" required />
+        <button type="button" class="toggle-password" data-target="forgot-password">&#128065;</button>
+      </div>
+      <label>Ulangi Password Baru</label>
+      <div class="password-field">
+        <input type="password" id="forgot-password-confirm" required />
+        <button type="button" class="toggle-password" data-target="forgot-password-confirm">&#128065;</button>
+      </div>
+      <p id="forgot-error" class="field-error hidden"></p>
+      <button type="submit">Reset Password</button>
+    </form>
+    <button class="link-btn" id="btn-back-login">Kembali ke login</button>
+  </div>
+</section>
+
+<!-- EMPLOYEE APP -->
+<section id="view-employee" class="view hidden">
+  <header class="topbar">
+    <div class="brand"><img src="/img/logo.svg" alt="Logo Tritronik" class="brand-logo" /> Absen Jakarta</div>
+    <div class="user-info">
+      <span id="emp-name"></span>
+      <button class="btn-secondary" id="btn-logout-emp">Keluar</button>
+    </div>
+  </header>
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="absen">Absen</button>
+    <button class="tab-btn" data-tab="izin">Izin/Sakit</button>
+    <button class="tab-btn" data-tab="riwayat">Riwayat</button>
+    <button class="tab-btn" data-tab="profil">Profil</button>
+  </nav>
+
+  <div id="tab-absen" class="tab-content">
+    <div class="card">
+      <h2>Absen Kehadiran</h2>
+      <div id="clock-display" class="clock-display"></div>
+      <div class="camera-box">
+        <video id="camera-preview" autoplay playsinline></video>
+        <canvas id="camera-canvas" class="hidden"></canvas>
+        <img id="captured-photo" class="hidden" alt="Foto absen" />
+      </div>
+      <div class="camera-actions">
+        <button type="button" id="btn-start-camera">Aktifkan Kamera</button>
+        <button type="button" id="btn-capture" class="hidden">Ambil Foto</button>
+        <button type="button" id="btn-retake" class="hidden">Ambil Ulang</button>
+      </div>
+      <div id="location-status" class="location-status">Lokasi belum terdeteksi</div>
+      <label>Catatan (wajib)</label>
+      <textarea id="absen-note" placeholder="Contoh: absen masuk shift pagi"></textarea>
+      <div class="absen-buttons">
+        <button type="button" class="btn-primary" id="btn-absen-masuk" disabled>Absen Masuk</button>
+        <button type="button" class="btn-primary" id="btn-absen-pulang" disabled>Absen Pulang</button>
+      </div>
+      <p class="absen-hint">Foto, lokasi, dan catatan wajib terisi sebelum bisa absen.</p>
+    </div>
+  </div>
+
+  <div id="tab-izin" class="tab-content hidden">
+    <div class="card">
+      <h2>Ajukan Izin / Sakit</h2>
+      <form id="form-leave">
+        <label>Jenis</label>
+        <select id="leave-type">
+          <option value="izin">Izin</option>
+          <option value="sakit">Sakit</option>
+        </select>
+        <label>Tanggal Mulai</label>
+        <input type="date" id="leave-start" required />
+        <label>Tanggal Selesai</label>
+        <input type="date" id="leave-end" required />
+        <label>Alasan</label>
+        <textarea id="leave-reason" required></textarea>
+        <label>Bukti (surat sakit / acc atasan)</label>
+        <input type="file" id="leave-proof" accept="image/*,.pdf" />
+        <button type="submit" class="btn-primary">Ajukan</button>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Riwayat Pengajuan</h2>
+      <table class="table" id="table-leave-mine">
+        <thead><tr><th>Tanggal</th><th>Jenis</th><th>Alasan</th><th>Status</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="tab-riwayat" class="tab-content hidden">
+    <div class="card">
+      <h2>Riwayat Absensi</h2>
+      <table class="table" id="table-riwayat">
+        <thead><tr><th>Waktu</th><th>Jenis</th><th>Catatan</th><th>Indikasi</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="tab-profil" class="tab-content hidden">
+    <div class="card">
+      <h2>Data Diri</h2>
+      <p class="profile-note" id="profile-lock-note">Data diri hanya dapat diubah oleh Admin/HCM. Hubungi HCM jika ada perubahan data.</p>
+      <label>Nama</label><input type="text" id="profile-name" disabled />
+      <label>Email</label><input type="email" id="profile-email" disabled />
+      <label>NIK</label><input type="text" id="profile-nik" disabled />
+      <label>Jabatan</label><input type="text" id="profile-position" disabled />
+      <label>Lokasi</label><input type="text" id="profile-location" disabled />
+    </div>
+    <div class="card">
+      <h2>Ubah Password</h2>
+      <form id="form-change-password">
+        <label>Password Saat Ini</label>
+        <div class="password-field">
+          <input type="password" id="cp-current" required />
+          <button type="button" class="toggle-password" data-target="cp-current">&#128065;</button>
+        </div>
+        <label>Password Baru</label>
+        <div class="password-field">
+          <input type="password" id="cp-new" required />
+          <button type="button" class="toggle-password" data-target="cp-new">&#128065;</button>
+        </div>
+        <p id="cp-error" class="field-error hidden"></p>
+        <button type="submit" class="btn-primary">Ubah Password</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- ADMIN APP -->
+<section id="view-admin" class="view hidden">
+  <header class="topbar">
+    <div class="brand"><img src="/img/logo.svg" alt="Logo Tritronik" class="brand-logo" /> Absen Jakarta — Admin</div>
+    <div class="user-info">
+      <span id="admin-name"></span>
+      <button class="btn-secondary" id="btn-logout-admin">Keluar</button>
+    </div>
+  </header>
+  <nav class="tabs">
+    <button class="tab-btn active" data-atab="ringkasan">Ringkasan</button>
+    <button class="tab-btn" data-atab="riwayat-admin">Riwayat</button>
+    <button class="tab-btn" data-atab="izin-admin">Izin/Sakit</button>
+    <button class="tab-btn" data-atab="karyawan">Karyawan</button>
+    <button class="tab-btn" data-atab="lokasi">Lokasi</button>
+    <button class="tab-btn" data-atab="jabatan">Jabatan</button>
+    <button class="tab-btn" data-atab="aktivitas">Aktivitas</button>
+    <button class="tab-btn" data-atab="profil-admin">Profil</button>
+  </nav>
+
+  <div id="atab-ringkasan" class="tab-content">
+    <div class="summary-grid">
+      <div class="summary-card"><div class="summary-num" id="sum-total">0</div><div>Total Karyawan Aktif</div></div>
+      <div class="summary-card"><div class="summary-num" id="sum-checkin">0</div><div>Absen Masuk Hari Ini</div></div>
+      <div class="summary-card"><div class="summary-num" id="sum-pending">0</div><div>Izin Pending</div></div>
+      <div class="summary-card"><div class="summary-num" id="sum-fake">0</div><div>Indikasi Fake GPS Hari Ini</div></div>
+    </div>
+  </div>
+
+  <div id="atab-riwayat-admin" class="tab-content hidden">
+    <div class="card">
+      <h2>Riwayat Absensi</h2>
+      <div class="filter-row">
+        <label>Dari</label><input type="date" id="filter-start" />
+        <label>Sampai</label><input type="date" id="filter-end" />
+        <button id="btn-filter-attendance">Terapkan</button>
+        <button id="btn-export-attendance" class="btn-secondary">Unduh Excel</button>
+      </div>
+      <table class="table" id="table-attendance-admin">
+        <thead><tr><th>Waktu</th><th>Nama</th><th>NIK/NIP</th><th>Jenis</th><th>Catatan</th><th>Indikasi</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="atab-izin-admin" class="tab-content hidden">
+    <div class="card">
+      <h2>Pengajuan Izin/Sakit</h2>
+      <table class="table" id="table-leave-admin">
+        <thead><tr><th>Nama</th><th>Jenis</th><th>Tanggal</th><th>Alasan</th><th>Bukti</th><th>Status</th><th>Aksi</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="atab-karyawan" class="tab-content hidden">
+    <div class="card">
+      <h2>Kelola Karyawan</h2>
+      <button id="btn-add-employee" class="btn-primary">+ Tambah Karyawan</button>
+      <button id="btn-export-employees" class="btn-secondary">Unduh Excel</button>
+      <table class="table" id="table-employees">
+        <thead><tr><th>Nama</th><th>Email</th><th>NIK/NIP</th><th>Jabatan</th><th>Lokasi</th><th>Status</th><th>Aksi</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="card hidden" id="employee-form-card">
+      <h2 id="employee-form-title">Tambah Karyawan</h2>
+      <form id="form-employee">
+        <input type="hidden" id="emp-id" />
+        <label>Nama</label><input type="text" id="emp-form-name" required />
+        <label>Email</label><input type="email" id="emp-form-email" required />
+        <label>NIK</label><input type="text" id="emp-form-nik" />
+        <label>Password <span id="emp-password-hint">(wajib untuk karyawan baru)</span></label>
+        <div class="password-field">
+          <input type="password" id="emp-form-password" />
+          <button type="button" class="toggle-password" data-target="emp-form-password">&#128065;</button>
+        </div>
+        <label>Role</label>
+        <select id="emp-form-role"><option value="employee">Karyawan</option><option value="admin">Admin</option></select>
+        <label>Jabatan</label>
+        <select id="emp-form-position"></select>
+        <label>Foto Profil</label>
+        <input type="file" id="emp-form-photo" accept="image/*" />
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">Simpan</button>
+          <button type="button" class="btn-secondary" id="btn-cancel-employee">Batal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="atab-lokasi" class="tab-content hidden">
+    <div class="card">
+      <h2>Kelola Lokasi</h2>
+      <form id="form-location">
+        <label>Nama Lokasi</label><input type="text" id="loc-name" required />
+        <label>Latitude</label><input type="number" step="any" id="loc-lat" required />
+        <label>Longitude</label><input type="number" step="any" id="loc-lng" required />
+        <label>Radius (meter)</label><input type="number" id="loc-radius" value="150" required />
+        <button type="submit" class="btn-primary">Tambah Lokasi</button>
+      </form>
+      <table class="table" id="table-locations">
+        <thead><tr><th>Nama</th><th>Lat</th><th>Lng</th><th>Radius (m)</th><th>Aksi</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="atab-jabatan" class="tab-content hidden">
+    <div class="card">
+      <h2>Kelola Jabatan</h2>
+      <form id="form-position">
+        <label>Nama Jabatan</label><input type="text" id="pos-name" required />
+        <button type="submit" class="btn-primary">Tambah Jabatan</button>
+      </form>
+      <table class="table" id="table-positions">
+        <thead><tr><th>Nama</th><th>Aksi</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="atab-aktivitas" class="tab-content hidden">
+    <div class="card">
+      <h2>Log Aktivitas</h2>
+      <table class="table" id="table-activity">
+        <thead><tr><th>Waktu</th><th>Karyawan</th><th>Aksi</th><th>Detail</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="atab-profil-admin" class="tab-content hidden">
+    <div class="card">
+      <h2>Data Diri (HCM)</h2>
+      <form id="form-admin-profile">
+        <label>Nama</label><input type="text" id="adm-profile-name" required />
+        <label>Email</label><input type="email" id="adm-profile-email" required />
+        <label>NIK</label><input type="text" id="adm-profile-nik" />
+        <label>Jabatan</label>
+        <select id="adm-profile-position"></select>
+        <button type="submit" class="btn-primary">Simpan Perubahan</button>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Ubah Password</h2>
+      <form id="form-adm-change-password">
+        <label>Password Saat Ini</label>
+        <div class="password-field">
+          <input type="password" id="adm-cp-current" required />
+          <button type="button" class="toggle-password" data-target="adm-cp-current">&#128065;</button>
+        </div>
+        <label>Password Baru</label>
+        <div class="password-field">
+          <input type="password" id="adm-cp-new" required />
+          <button type="button" class="toggle-password" data-target="adm-cp-new">&#128065;</button>
+        </div>
+        <p id="adm-cp-error" class="field-error hidden"></p>
+        <button type="submit" class="btn-primary">Ubah Password</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- MODAL: deactivate employee -->
+<div id="modal-deactivate" class="modal hidden">
+  <div class="modal-box">
+    <h3>Nonaktifkan Karyawan</h3>
+    <label>Tanggal Keluar</label>
+    <input type="date" id="deactivate-date" required />
+    <div class="form-actions">
+      <button id="btn-confirm-deactivate" class="btn-primary">Konfirmasi</button>
+      <button id="btn-cancel-deactivate" class="btn-secondary">Batal</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+</body>
+</html>
