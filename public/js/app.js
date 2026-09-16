@@ -534,6 +534,34 @@ document.getElementById('btn-export-employees').onclick = () => {
   window.location.href = '/api/admin/export/employees';
 };
 
+document.getElementById('btn-import-employees').onclick = () => {
+  document.getElementById('import-employees-file').click();
+};
+
+document.getElementById('import-employees-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const result = await api('/admin/employees/import', { method: 'POST', body: fd });
+    let msg = `Import selesai: ${result.inserted} ditambahkan, ${result.updated} diperbarui`;
+    if (result.skippedAdmins) msg += `, ${result.skippedAdmins} akun admin dilewati`;
+    toast(msg);
+    if (result.unknownPositions && result.unknownPositions.length) {
+      toast(`Jabatan tidak dikenal (dibiarkan kosong): ${result.unknownPositions.join(', ')}`, true);
+    }
+    if (result.errors && result.errors.length) {
+      toast(`${result.errors.length} baris gagal: ${result.errors.join('; ')}`, true);
+    }
+    loadEmployees();
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    e.target.value = '';
+  }
+});
+
 async function loadLeaveAdmin() {
   const { rows } = await api('/leave/all');
   const tbody = document.querySelector('#table-leave-admin tbody');

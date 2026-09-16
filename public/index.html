@@ -238,6 +238,9 @@
       <h2>Kelola Karyawan</h2>
       <button id="btn-add-employee" class="btn-primary">+ Tambah Karyawan</button>
       <button id="btn-export-employees" class="btn-secondary">Unduh Excel</button>
+      <button id="btn-import-employees" class="btn-secondary">Import Excel</button>
+      <input type="file" id="import-employees-file" accept=".xlsx" class="hidden" />
+      <p class="field-hint">Format file: sheet "Karyawan" (Email, Password, Nama, NIK, Jabatan, Tanggal Masuk, Status, Tanggal Keluar) dan sheet "Jabatan" (daftar nama jabatan).</p>
       <table class="table" id="table-employees">
         <thead><tr><th>Nama</th><th>Email</th><th>NIK/NIP</th><th>Jabatan</th><th>Lokasi</th><th>Status</th><th>Aksi</th></tr></thead>
         <tbody></tbody>

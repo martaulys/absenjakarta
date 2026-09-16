@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
+const ExcelJS = require('exceljs');
 const db = require('../db');
 const { requireAdmin } = require('../middleware/auth');
 const { buildAttendanceWorkbook, buildEmployeeWorkbook } = require('../utils/excel');
@@ -119,6 +120,123 @@ router.post('/employees/:id/deactivate', (req, res) => {
 router.post('/employees/:id/reactivate', (req, res) => {
   db.prepare('UPDATE employees SET active = 1, exit_date = NULL WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
+});
+
+// ---- Import karyawan dari Excel ----
+const excelUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+function excelDateToSql(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  const str = String(value).trim();
+  return str || null;
+}
+
+router.post('/employees/import', excelUpload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'File Excel wajib diunggah' });
+
+  let workbook;
+  try {
+    workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(req.file.buffer);
+  } catch (err) {
+    return res.status(400).json({ error: 'File Excel tidak valid atau rusak' });
+  }
+
+  const karyawanSheet = workbook.getWorksheet('Karyawan');
+  const jabatanSheet = workbook.getWorksheet('Jabatan');
+  if (!karyawanSheet) {
+    return res.status(400).json({ error: 'Sheet "Karyawan" tidak ditemukan dalam file' });
+  }
+
+  // 1) Pastikan semua jabatan dari sheet Jabatan tersedia (tidak menghapus jabatan yang sudah ada)
+  const positionIdByName = {};
+  db.prepare('SELECT id, name FROM positions').all().forEach((p) => {
+    positionIdByName[p.name] = p.id;
+  });
+  if (jabatanSheet) {
+    jabatanSheet.eachRow((row, idx) => {
+      if (idx === 1) return;
+      const name = String(row.getCell(1).value || '').trim();
+      if (!name || positionIdByName[name]) return;
+      const result = db.prepare('INSERT INTO positions (name) VALUES (?)').run(name);
+      positionIdByName[name] = result.lastInsertRowid;
+    });
+  }
+
+  const defaultLocation = db.prepare('SELECT id FROM locations LIMIT 1').get();
+
+  let inserted = 0;
+  let updated = 0;
+  let skippedAdmins = 0;
+  const unknownPositions = new Set();
+  const errors = [];
+
+  karyawanSheet.eachRow((row, idx) => {
+    if (idx === 1) return; // header
+    const emailCell = row.getCell(1).value;
+    const email = (emailCell && emailCell.text ? emailCell.text : emailCell || '').toString().trim().toLowerCase();
+    if (!email) return;
+
+    try {
+      const password = String(row.getCell(2).value || '').trim();
+      const name = String(row.getCell(3).value || '').trim();
+      const nik = String(row.getCell(4).value || '').trim() || null;
+      const jabatan = String(row.getCell(5).value || '').trim();
+      const tanggalMasuk = excelDateToSql(row.getCell(6).value);
+      const status = String(row.getCell(7).value || '').trim();
+      const tanggalKeluar = excelDateToSql(row.getCell(8).value);
+      const active = status.toLowerCase() === 'aktif' ? 1 : 0;
+
+      let positionId = null;
+      if (jabatan) {
+        positionId = positionIdByName[jabatan] || null;
+        if (!positionId) unknownPositions.add(jabatan);
+      }
+
+      const existing = db.prepare('SELECT id, role FROM employees WHERE email = ?').get(email);
+
+      if (existing) {
+        if (existing.role === 'admin') {
+          skippedAdmins++;
+          return;
+        }
+        db.prepare(
+          `UPDATE employees SET name = ?, nik = ?, position_id = ?, active = ?, exit_date = ? WHERE id = ?`
+        ).run(name || null, nik, positionId, active, tanggalKeluar, existing.id);
+        updated++;
+      } else {
+        if (!name || !password) {
+          errors.push(`${email}: nama atau password kosong, baris dilewati`);
+          return;
+        }
+        const passwordHash = bcrypt.hashSync(password, 10);
+        const createdAt = tanggalMasuk ? `${tanggalMasuk} 00:00:00` : undefined;
+        if (createdAt) {
+          db.prepare(
+            `INSERT INTO employees (nik, name, email, password_hash, role, position_id, location_id, active, exit_date, created_at)
+             VALUES (?, ?, ?, ?, 'employee', ?, ?, ?, ?, ?)`
+          ).run(nik, name, email, passwordHash, positionId, defaultLocation ? defaultLocation.id : null, active, tanggalKeluar, createdAt);
+        } else {
+          db.prepare(
+            `INSERT INTO employees (nik, name, email, password_hash, role, position_id, location_id, active, exit_date)
+             VALUES (?, ?, ?, ?, 'employee', ?, ?, ?, ?)`
+          ).run(nik, name, email, passwordHash, positionId, defaultLocation ? defaultLocation.id : null, active, tanggalKeluar);
+        }
+        inserted++;
+      }
+    } catch (err) {
+      errors.push(`${email}: ${err.message}`);
+    }
+  });
+
+  res.json({
+    inserted,
+    updated,
+    skippedAdmins,
+    unknownPositions: Array.from(unknownPositions),
+    errors,
+  });
 });
 
 // ---- Positions ----
