@@ -36,7 +36,10 @@ Akun admin default dibuat otomatis saat pertama kali dijalankan (jika belum ada 
 - Login karyawan per akun (email + password), dengan akun admin khusus
 - Absen masuk/pulang: foto langsung dari kamera (wajib), deteksi lokasi GPS, catatan wajib
 - Multi-lokasi kantor (mis. Jakarta & Bandung) — saat absen, sistem mencari lokasi kantor **terdekat** dari seluruh daftar di Kelola Lokasi, bukan hanya satu lokasi yang di-assign ke karyawan
-- Heuristik deteksi indikasi fake GPS: akurasi GPS rendah/tidak ada, lompatan lokasi tidak wajar antar absen, di luar radius lokasi kantor terdekat yang terdaftar — hasil "terindikasi" langsung terlihat admin di Riwayat Absensi, Ringkasan, dan export Excel
+- Heuristik deteksi indikasi fake GPS: akurasi GPS rendah/tidak ada, lompatan lokasi tidak wajar antar absen, di luar radius lokasi kantor terdekat yang terdaftar, API geolocation browser terindikasi dimodifikasi, serta lokasi dari alamat IP yang jauh berbeda dari koordinat GPS — hasil "terindikasi" langsung terlihat admin di Riwayat Absensi, Ringkasan, dan export Excel
+- Riwayat Absensi mencatat jenis perangkat (OS + browser) dan alamat IP setiap absen, terlihat oleh karyawan (riwayat sendiri) dan admin (semua karyawan)
+- Semua waktu absen/aktivitas dicatat dalam zona waktu Jakarta (WIB/UTC+7), konsisten dengan jam yang tampil di halaman absen
+- Lokasi kerja (mis. Jakarta/Bandung) dapat diatur admin per karyawan lewat Kelola Karyawan
 - Pengajuan izin/sakit dengan rentang tanggal dan unggah bukti (surat sakit/acc atasan)
 - Reset password mandiri ("Lupa password?") dengan aturan minimal 8 karakter + huruf kapital + angka, tercatat di log aktivitas admin
 - Dashboard admin: ringkasan, riwayat absensi (filter tanggal), kelola karyawan (tambah/edit/nonaktifkan dengan tanggal keluar), kelola lokasi kantor, kelola jabatan, log aktivitas
@@ -65,3 +68,5 @@ Untuk penggunaan kantor skala kecil-menengah dengan volume terpasang, setup SQLi
 - Heuristik fake-GPS bersifat indikatif (bukan bukti mutlak) — hasil "terindikasi" tetap tersimpan di riwayat untuk ditinjau admin, absen tidak diblokir otomatis.
 - Kamera & geolokasi browser memerlukan koneksi HTTPS (atau `localhost`) agar `getUserMedia`/`Geolocation` API berfungsi.
 - Keterangan alamat pada kamera absen menggunakan layanan reverse-geocoding gratis (OpenStreetMap Nominatim) — tanpa API key, tapi bergantung pada ketersediaan layanan pihak ketiga tersebut dan dibatasi ~1 permintaan/detik (cukup untuk pola pemakaian absen normal).
+- Deteksi mock-location memakai layanan IP geolocation gratis (ip-api.com, tanpa API key) sebagai pembanding non-blocking — jika layanan gagal/limit, absen tetap diproses normal tanpa pengecekan ini (fail-open, bukan bug).
+- Deteksi "API geolocation dimodifikasi" adalah heuristik client-side sederhana (memeriksa apakah `navigator.geolocation` masih kode native browser) — bisa dilewati oleh spoofer yang lebih canggih, jadi tetap bersifat indikatif seperti heuristik fake-GPS lainnya.

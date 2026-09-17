@@ -3,6 +3,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 const bcrypt = require('bcryptjs');
+const { nowJakartaSql } = require('./utils/time');
 
 const dataDir = path.join(__dirname, '..', 'data');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
@@ -79,6 +80,15 @@ CREATE TABLE IF NOT EXISTS activity_log (
 );
 `);
 
+// Migrations for columns added after initial release
+const attendanceColumns = db.prepare("PRAGMA table_info(attendance)").all().map((c) => c.name);
+if (!attendanceColumns.includes('device_info')) {
+  db.exec('ALTER TABLE attendance ADD COLUMN device_info TEXT');
+}
+if (!attendanceColumns.includes('ip_address')) {
+  db.exec('ALTER TABLE attendance ADD COLUMN ip_address TEXT');
+}
+
 // Seed default data on first run
 const positionCount = db.prepare('SELECT COUNT(*) AS c FROM positions').get().c;
 if (positionCount === 0) {
@@ -101,9 +111,9 @@ if (!admin) {
   const adminPassword = process.env.ADMIN_DEFAULT_PASSWORD || crypto.randomBytes(6).toString('hex') + 'Aa1';
   const passwordHash = bcrypt.hashSync(adminPassword, 10);
   db.prepare(
-    `INSERT INTO employees (nik, nip, name, email, password_hash, role, position_id, location_id, active)
-     VALUES (?, ?, ?, ?, ?, 'admin', ?, ?, 1)`
-  ).run('ADMIN001', 'ADMIN001', 'Administrator HCM', adminEmail, passwordHash, hcmPosition.id, defaultLocation.id);
+    `INSERT INTO employees (nik, nip, name, email, password_hash, role, position_id, location_id, active, created_at)
+     VALUES (?, ?, ?, ?, ?, 'admin', ?, ?, 1, ?)`
+  ).run('ADMIN001', 'ADMIN001', 'Administrator HCM', adminEmail, passwordHash, hcmPosition.id, defaultLocation.id, nowJakartaSql());
   console.log(`Akun admin dibuat: ${adminEmail} / ${adminPassword} (harap segera ganti password setelah login pertama)`);
 }
 

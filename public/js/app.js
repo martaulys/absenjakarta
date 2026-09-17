@@ -3,6 +3,7 @@ const state = {
   capturedBlob: null,
   currentPosition: null,
   locationAddress: null,
+  geoApiSuspicious: false,
   positions: [],
   locations: [],
   editingEmployeeId: null,
@@ -317,6 +318,19 @@ function updateAbsenButtonsState() {
   document.getElementById('btn-absen-pulang').disabled = !ready;
 }
 
+function isGeolocationApiSuspicious() {
+  try {
+    // Native browser APIs stringify to "function foo() { [native code] }".
+    // Extensions/scripts that override getCurrentPosition to fake coordinates
+    // replace this with actual JS source, which is a strong tampering signal.
+    const fn = navigator.geolocation && navigator.geolocation.getCurrentPosition;
+    if (!fn || !/\[native code\]/.test(Function.prototype.toString.call(fn))) return true;
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 function requestLocation() {
   const statusEl = document.getElementById('location-status');
   statusEl.textContent = 'Mendeteksi lokasi...';
@@ -327,6 +341,7 @@ function requestLocation() {
     updateAbsenButtonsState();
     return;
   }
+  state.geoApiSuspicious = isGeolocationApiSuspicious();
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       state.currentPosition = pos.coords;
@@ -360,6 +375,7 @@ async function submitAbsen(type) {
     fd.append('lng', state.currentPosition.longitude);
     fd.append('accuracy', state.currentPosition.accuracy);
     fd.append('note', note);
+    fd.append('geoApiSuspicious', state.geoApiSuspicious ? 'true' : 'false');
 
     const result = await api('/attendance/check-in', { method: 'POST', body: fd });
     if (result.flagged) {
@@ -380,6 +396,7 @@ function resetAbsenForm() {
   state.capturedBlob = null;
   state.currentPosition = null;
   state.locationAddress = null;
+  state.geoApiSuspicious = false;
   document.getElementById('absen-note').value = '';
   document.getElementById('captured-photo').classList.add('hidden');
   document.getElementById('btn-retake').classList.add('hidden');
@@ -403,6 +420,8 @@ async function loadHistory() {
         <td>${r.timestamp}</td>
         <td>${r.type === 'masuk' ? 'Masuk' : 'Pulang'}</td>
         <td>${r.note}</td>
+        <td>${r.device_info || '-'}</td>
+        <td>${r.ip_address || '-'}</td>
         <td>${r.fake_gps_flag ? '<span class="badge warn">Terindikasi</span>' : '<span class="badge ok">Normal</span>'}</td>
       </tr>`
     )
@@ -518,7 +537,9 @@ async function loadAttendanceAdmin() {
         <td>${r.nik || r.nip || '-'}</td>
         <td>${r.type === 'masuk' ? 'Masuk' : 'Pulang'}</td>
         <td>${r.note}</td>
-        <td>${r.fake_gps_flag ? '<span class="badge warn">Terindikasi</span>' : '<span class="badge ok">Normal</span>'}</td>
+        <td>${r.device_info || '-'}</td>
+        <td>${r.ip_address || '-'}</td>
+        <td>${r.fake_gps_flag ? `<span class="badge warn" title="${(r.fake_gps_reasons || '').replace(/"/g, '&quot;')}">Terindikasi</span>` : '<span class="badge ok">Normal</span>'}</td>
       </tr>`
     )
     .join('');
@@ -598,6 +619,8 @@ async function loadAdminRefData() {
   state.locations = locations;
   const posSelect = document.getElementById('emp-form-position');
   posSelect.innerHTML = positions.map((p) => `<option value="${p.id}">${p.name}</option>`).join('');
+  const empLocSelect = document.getElementById('emp-form-location');
+  empLocSelect.innerHTML = locations.map((l) => `<option value="${l.id}">${l.name}</option>`).join('');
   const admPosSelect = document.getElementById('adm-profile-position');
   admPosSelect.innerHTML = positions.map((p) => `<option value="${p.id}">${p.name}</option>`).join('');
   const admLocSelect = document.getElementById('adm-profile-location');
@@ -675,6 +698,7 @@ async function openEmployeeForm(emp) {
   document.getElementById('emp-form-password').value = '';
   document.getElementById('emp-form-role').value = emp ? emp.role : 'employee';
   if (emp && emp.position_id) document.getElementById('emp-form-position').value = emp.position_id;
+  if (emp && emp.location_id) document.getElementById('emp-form-location').value = emp.location_id;
   document.getElementById('employee-form-card').classList.remove('hidden');
 }
 
@@ -692,6 +716,7 @@ document.getElementById('form-employee').onsubmit = async (e) => {
     fd.append('nik', document.getElementById('emp-form-nik').value);
     fd.append('role', document.getElementById('emp-form-role').value);
     fd.append('positionId', document.getElementById('emp-form-position').value);
+    fd.append('locationId', document.getElementById('emp-form-location').value);
     if (password) fd.append('password', password);
     const photoFile = document.getElementById('emp-form-photo').files[0];
     if (photoFile) fd.append('photo', photoFile);

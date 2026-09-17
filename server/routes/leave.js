@@ -3,6 +3,7 @@ const path = require('path');
 const multer = require('multer');
 const db = require('../db');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { nowJakartaSql } = require('../utils/time');
 
 const router = express.Router();
 
@@ -29,10 +30,10 @@ router.post('/', requireAuth, upload.single('proof'), (req, res) => {
   const proofPath = req.file ? path.join('proof', req.file.filename).replace(/\\/g, '/') : null;
   const result = db
     .prepare(
-      `INSERT INTO leave_requests (employee_id, type, start_date, end_date, reason, proof_path)
-       VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO leave_requests (employee_id, type, start_date, end_date, reason, proof_path, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(req.session.employeeId, type, startDate, endDate, reason.trim(), proofPath);
+    .run(req.session.employeeId, type, startDate, endDate, reason.trim(), proofPath, nowJakartaSql());
   res.json({ id: result.lastInsertRowid });
 });
 
@@ -59,9 +60,12 @@ router.post('/:id/review', requireAdmin, (req, res) => {
   if (!['approved', 'rejected'].includes(status)) {
     return res.status(400).json({ error: 'Status tidak valid' });
   }
-  db.prepare(
-    'UPDATE leave_requests SET status = ?, reviewed_by = ?, reviewed_at = datetime(\'now\') WHERE id = ?'
-  ).run(status, req.session.employeeId, req.params.id);
+  db.prepare('UPDATE leave_requests SET status = ?, reviewed_by = ?, reviewed_at = ? WHERE id = ?').run(
+    status,
+    req.session.employeeId,
+    nowJakartaSql(),
+    req.params.id
+  );
   res.json({ ok: true });
 });
 

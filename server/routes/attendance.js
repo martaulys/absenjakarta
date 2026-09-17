@@ -3,7 +3,9 @@ const path = require('path');
 const multer = require('multer');
 const db = require('../db');
 const { requireAuth } = require('../middleware/auth');
-const { evaluateFakeGps } = require('../utils/fakeGps');
+const { evaluateFakeGps, lookupIpLocation } = require('../utils/fakeGps');
+const { parseDeviceInfo, getClientIp } = require('../utils/deviceInfo');
+const { nowJakartaSql } = require('../utils/time');
 
 const router = express.Router();
 
@@ -23,9 +25,9 @@ const upload = multer({
   },
 });
 
-router.post('/check-in', requireAuth, upload.single('photo'), (req, res) => {
+router.post('/check-in', requireAuth, upload.single('photo'), async (req, res) => {
   try {
-    const { type, lat, lng, accuracy, note } = req.body;
+    const { type, lat, lng, accuracy, note, geoApiSuspicious } = req.body;
     if (!['masuk', 'pulang'].includes(type)) {
       return res.status(400).json({ error: 'Jenis absen tidak valid' });
     }
@@ -49,24 +51,31 @@ router.post('/check-in', requireAuth, upload.single('photo'), (req, res) => {
     const parsedLng = parseFloat(lng);
     const parsedAccuracy = accuracy !== undefined && accuracy !== '' ? parseFloat(accuracy) : null;
 
+    const clientIp = getClientIp(req);
+    const deviceInfo = parseDeviceInfo(req.headers['user-agent']);
+    const ipLocation = await lookupIpLocation(clientIp);
+
     const { flagged, reasons, distanceFromLocation } = evaluateFakeGps({
       lat: parsedLat,
       lng: parsedLng,
       accuracy: parsedAccuracy,
       locations,
       lastAttendance,
+      geoApiSuspicious: geoApiSuspicious === 'true' || geoApiSuspicious === true,
+      ipLocation,
     });
 
     const relativePath = path.join('attendance', req.file.filename).replace(/\\/g, '/');
 
     const result = db
       .prepare(
-        `INSERT INTO attendance (employee_id, type, lat, lng, accuracy, distance_from_location, photo_path, note, fake_gps_flag, fake_gps_reasons)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO attendance (employee_id, type, timestamp, lat, lng, accuracy, distance_from_location, photo_path, note, fake_gps_flag, fake_gps_reasons, device_info, ip_address)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         emp.id,
         type,
+        nowJakartaSql(),
         parsedLat,
         parsedLng,
         parsedAccuracy,
@@ -74,7 +83,9 @@ router.post('/check-in', requireAuth, upload.single('photo'), (req, res) => {
         relativePath,
         note.trim(),
         flagged ? 1 : 0,
-        reasons.join('; ')
+        reasons.join('; '),
+        deviceInfo,
+        clientIp
       );
 
     res.json({

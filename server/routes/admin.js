@@ -6,6 +6,7 @@ const ExcelJS = require('exceljs');
 const db = require('../db');
 const { requireAdmin } = require('../middleware/auth');
 const { buildAttendanceWorkbook, buildEmployeeWorkbook } = require('../utils/excel');
+const { nowJakartaSql, todayJakarta } = require('../utils/time');
 
 const router = express.Router();
 
@@ -22,7 +23,7 @@ router.use(requireAdmin);
 
 // ---- Dashboard summary ----
 router.get('/summary', (req, res) => {
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayJakarta();
   const totalEmployees = db.prepare('SELECT COUNT(*) c FROM employees WHERE role = ? AND active = 1').get('employee').c;
   const checkedInToday = db
     .prepare("SELECT COUNT(DISTINCT employee_id) c FROM attendance WHERE type = 'masuk' AND timestamp LIKE ?")
@@ -62,7 +63,7 @@ router.get('/employees', (req, res) => {
 });
 
 router.post('/employees', upload.single('photo'), (req, res) => {
-  const { nik, name, email, password, role, positionId } = req.body;
+  const { nik, name, email, password, role, positionId, locationId } = req.body;
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'Nama, email, dan password wajib diisi' });
   }
@@ -72,10 +73,20 @@ router.post('/employees', upload.single('photo'), (req, res) => {
     const defaultLocation = db.prepare('SELECT id FROM locations LIMIT 1').get();
     const result = db
       .prepare(
-        `INSERT INTO employees (nik, name, email, password_hash, role, position_id, location_id, photo_path)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO employees (nik, name, email, password_hash, role, position_id, location_id, photo_path, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(nik || null, name, email.toLowerCase().trim(), hash, role || 'employee', positionId || null, defaultLocation ? defaultLocation.id : null, photoPath);
+      .run(
+        nik || null,
+        name,
+        email.toLowerCase().trim(),
+        hash,
+        role || 'employee',
+        positionId || null,
+        locationId || (defaultLocation ? defaultLocation.id : null),
+        photoPath,
+        nowJakartaSql()
+      );
     res.json({ id: result.lastInsertRowid });
   } catch (err) {
     if (String(err.message).includes('UNIQUE')) {

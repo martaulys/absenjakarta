@@ -139,7 +139,7 @@
     <div class="card">
       <h2>Riwayat Absensi</h2>
       <table class="table" id="table-riwayat">
-        <thead><tr><th>Waktu</th><th>Jenis</th><th>Catatan</th><th>Indikasi</th></tr></thead>
+        <thead><tr><th>Waktu</th><th>Jenis</th><th>Catatan</th><th>Perangkat</th><th>IP</th><th>Indikasi</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -217,7 +217,7 @@
         <button id="btn-export-attendance" class="btn-secondary">Unduh Excel</button>
       </div>
       <table class="table" id="table-attendance-admin">
-        <thead><tr><th>Waktu</th><th>Nama</th><th>NIK/NIP</th><th>Jenis</th><th>Catatan</th><th>Indikasi</th></tr></thead>
+        <thead><tr><th>Waktu</th><th>Nama</th><th>NIK/NIP</th><th>Jenis</th><th>Catatan</th><th>Perangkat</th><th>IP</th><th>Indikasi</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -264,6 +264,8 @@
         <select id="emp-form-role"><option value="employee">Karyawan</option><option value="admin">Admin</option></select>
         <label>Jabatan</label>
         <select id="emp-form-position"></select>
+        <label>Lokasi Kerja</label>
+        <select id="emp-form-location"></select>
         <label>Foto Profil</label>
         <input type="file" id="emp-form-photo" accept="image/*" />
         <div class="form-actions">

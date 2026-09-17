@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { nowJakartaSql } = require('../utils/time');
 
 const router = express.Router();
 
@@ -80,10 +81,11 @@ router.post('/change-password', requireAuth, (req, res) => {
   }
   const hash = bcrypt.hashSync(newPassword, 10);
   db.prepare('UPDATE employees SET password_hash = ? WHERE id = ?').run(hash, emp.id);
-  db.prepare('INSERT INTO activity_log (employee_id, action, detail) VALUES (?, ?, ?)').run(
+  db.prepare('INSERT INTO activity_log (employee_id, action, detail, created_at) VALUES (?, ?, ?, ?)').run(
     emp.id,
     'change_password',
-    'Ubah password lewat halaman profil'
+    'Ubah password lewat halaman profil',
+    nowJakartaSql()
   );
   res.json({ ok: true });
 });
@@ -107,10 +109,11 @@ router.post('/reset-password', (req, res) => {
   }
   const hash = bcrypt.hashSync(newPassword, 10);
   db.prepare('UPDATE employees SET password_hash = ? WHERE id = ?').run(hash, emp.id);
-  db.prepare('INSERT INTO activity_log (employee_id, action, detail) VALUES (?, ?, ?)').run(
+  db.prepare('INSERT INTO activity_log (employee_id, action, detail, created_at) VALUES (?, ?, ?, ?)').run(
     emp.id,
     'reset_password',
-    'Reset password mandiri oleh karyawan'
+    'Reset password mandiri oleh karyawan',
+    nowJakartaSql()
   );
   res.json({ ok: true });
 });
