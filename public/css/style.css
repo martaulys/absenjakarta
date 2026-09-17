@@ -191,6 +191,9 @@ input:disabled, select:disabled, textarea:disabled {
   display: flex; align-items: center; justify-content: center; z-index: 100;
 }
 .modal-box { background: white; padding: 24px; border-radius: 12px; width: 320px; }
+.modal-box-wide {
+  width: 90vw; max-width: 480px; max-height: 85vh; overflow-y: auto;
+}
 
 .toast {
   position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
