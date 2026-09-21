@@ -32,7 +32,8 @@ router.get('/summary', (req, res) => {
   const fakeGpsToday = db
     .prepare('SELECT COUNT(*) c FROM attendance WHERE fake_gps_flag = 1 AND timestamp LIKE ?')
     .get(`${today}%`).c;
-  res.json({ totalEmployees, checkedInToday, pendingLeave, fakeGpsToday });
+  const pendingReview = db.prepare("SELECT COUNT(*) c FROM attendance WHERE review_status = 'needs_review'").get().c;
+  res.json({ totalEmployees, checkedInToday, pendingLeave, fakeGpsToday, pendingReview });
 });
 
 router.get('/attendance', (req, res) => {
@@ -46,6 +47,29 @@ router.get('/attendance', (req, res) => {
   query += ' ORDER BY a.timestamp DESC LIMIT 500';
   const rows = db.prepare(query).all(...params);
   res.json({ rows });
+});
+
+router.post('/attendance/:id/review', (req, res) => {
+  const { status } = req.body; // 'verified' | 'rejected'
+  if (!['verified', 'rejected'].includes(status)) {
+    return res.status(400).json({ error: 'Status verifikasi tidak valid' });
+  }
+  const row = db.prepare('SELECT * FROM attendance WHERE id = ?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'Data absen tidak ditemukan' });
+
+  db.prepare('UPDATE attendance SET review_status = ?, reviewed_by = ?, reviewed_at = ? WHERE id = ?').run(
+    status,
+    req.session.employeeId,
+    nowJakartaSql(),
+    req.params.id
+  );
+  db.prepare('INSERT INTO activity_log (employee_id, action, detail, created_at) VALUES (?, ?, ?, ?)').run(
+    req.session.employeeId,
+    status === 'verified' ? 'verify_attendance' : 'reject_attendance',
+    `Absen #${row.id} (karyawan ID ${row.employee_id}, ${row.timestamp}) ditandai ${status === 'verified' ? 'terverifikasi' : 'ditolak'}`,
+    nowJakartaSql()
+  );
+  res.json({ ok: true });
 });
 
 // ---- Employees ----

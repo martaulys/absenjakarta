@@ -2,6 +2,7 @@ const state = {
   employee: null,
   capturedBlob: null,
   currentPosition: null,
+  secondPosition: null,
   locationAddress: null,
   geoApiSuspicious: false,
   positions: [],
@@ -326,15 +327,34 @@ function requestLocation() {
     return;
   }
   state.geoApiSuspicious = isGeolocationApiSuspicious();
+  state.secondPosition = null;
+  const firstFixTime = Date.now();
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       state.currentPosition = pos.coords;
-      statusEl.textContent = `Lokasi terdeteksi (akurasi ±${Math.round(pos.coords.accuracy)}m)`;
+      statusEl.textContent = `Lokasi terdeteksi (akurasi ±${Math.round(pos.coords.accuracy)}m) — memvalidasi...`;
       statusEl.className = 'location-status ok';
       const coordsEl = document.getElementById('camera-coords');
       if (coordsEl) coordsEl.textContent = `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`;
       reverseGeocode(pos.coords.latitude, pos.coords.longitude);
       updateAbsenButtonsState();
+
+      // Take a 2nd reading a couple seconds later: real handheld GPS naturally drifts a
+      // little between readings, while a static/injected mock location typically won't.
+      setTimeout(() => {
+        navigator.geolocation.getCurrentPosition(
+          (pos2) => {
+            state.secondPosition = { lat: pos2.coords.latitude, lng: pos2.coords.longitude, elapsedMs: Date.now() - firstFixTime };
+            if (statusEl.textContent.includes('memvalidasi')) {
+              statusEl.textContent = `Lokasi terdeteksi (akurasi ±${Math.round(pos.coords.accuracy)}m)`;
+            }
+          },
+          () => {
+            /* best-effort only - don't block check-in if the 2nd read fails */
+          },
+          { enableHighAccuracy: true, timeout: 10000 }
+        );
+      }, 2500);
     },
     (err) => {
       statusEl.textContent = 'Gagal mendapatkan lokasi: ' + err.message;
@@ -360,10 +380,15 @@ async function submitAbsen(type) {
     fd.append('accuracy', state.currentPosition.accuracy);
     fd.append('note', note);
     fd.append('geoApiSuspicious', state.geoApiSuspicious ? 'true' : 'false');
+    if (state.secondPosition) {
+      fd.append('lat2', state.secondPosition.lat);
+      fd.append('lng2', state.secondPosition.lng);
+      fd.append('sampleElapsedMs', state.secondPosition.elapsedMs);
+    }
 
     const result = await api('/attendance/check-in', { method: 'POST', body: fd });
     if (result.flagged) {
-      toast('Absen tersimpan, namun terindikasi lokasi tidak wajar: ' + result.reasons.join('; '), true);
+      toast('Absen tersimpan, namun terindikasi lokasi mencurigakan dan perlu verifikasi admin: ' + result.reasons.join('; '), true);
     } else {
       toast('Absen berhasil disimpan');
     }
@@ -379,6 +404,7 @@ document.getElementById('btn-absen-pulang').onclick = () => submitAbsen('pulang'
 function resetAbsenForm() {
   state.capturedBlob = null;
   state.currentPosition = null;
+  state.secondPosition = null;
   state.locationAddress = null;
   state.geoApiSuspicious = false;
   document.getElementById('absen-note').value = '';
@@ -507,7 +533,15 @@ async function loadSummary() {
   document.getElementById('sum-checkin').textContent = s.checkedInToday;
   document.getElementById('sum-pending').textContent = s.pendingLeave;
   document.getElementById('sum-fake').textContent = s.fakeGpsToday;
+  document.getElementById('sum-review').textContent = s.pendingReview;
 }
+
+const REVIEW_STATUS_BADGE = {
+  needs_review: '<span class="badge warn">Perlu Verifikasi</span>',
+  verified: '<span class="badge ok">Terverifikasi</span>',
+  rejected: '<span class="badge warn">Ditolak</span>',
+  ok: '',
+};
 
 async function loadAttendanceAdmin() {
   const start = document.getElementById('filter-start').value;
@@ -525,10 +559,34 @@ async function loadAttendanceAdmin() {
         <td>${r.note}</td>
         <td>${r.device_info || '-'}</td>
         <td>${r.ip_address || '-'}</td>
-        <td>${r.fake_gps_flag ? `<span class="badge warn" title="${(r.fake_gps_reasons || '').replace(/"/g, '&quot;')}">Terindikasi</span>` : '<span class="badge ok">Normal</span>'}</td>
+        <td>${r.fake_gps_flag ? `<span class="badge warn" title="${(r.fake_gps_reasons || '').replace(/"/g, '&quot;')}">Terindikasi (skor ${r.risk_score})</span>` : '<span class="badge ok">Normal</span>'}</td>
+        <td>
+          ${REVIEW_STATUS_BADGE[r.review_status] || ''}
+          ${
+            r.review_status === 'needs_review'
+              ? `<button data-id="${r.id}" data-action="verified" class="btn-review-att btn-secondary">Verifikasi</button>
+                 <button data-id="${r.id}" data-action="rejected" class="btn-review-att btn-secondary">Tolak</button>`
+              : ''
+          }
+        </td>
       </tr>`
     )
     .join('');
+  document.querySelectorAll('.btn-review-att').forEach((btn) => {
+    btn.onclick = async () => {
+      try {
+        await api(`/admin/attendance/${btn.dataset.id}/review`, {
+          method: 'POST',
+          body: JSON.stringify({ status: btn.dataset.action }),
+        });
+        toast(btn.dataset.action === 'verified' ? 'Absen ditandai terverifikasi' : 'Absen ditandai ditolak');
+        loadAttendanceAdmin();
+        loadSummary();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    };
+  });
 }
 document.getElementById('btn-filter-attendance').onclick = loadAttendanceAdmin;
 document.getElementById('btn-export-attendance').onclick = () => {
@@ -791,6 +849,8 @@ document.getElementById('form-position').onsubmit = async (e) => {
 const ACTIVITY_LABELS = {
   reset_password: { label: 'Lupa Password (Reset Mandiri)', badge: 'warn' },
   change_password: { label: 'Ubah Password', badge: 'ok' },
+  verify_attendance: { label: 'Verifikasi Absen', badge: 'ok' },
+  reject_attendance: { label: 'Tolak Absen', badge: 'warn' },
 };
 
 async function loadActivity() {

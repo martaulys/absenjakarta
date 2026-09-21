@@ -88,6 +88,19 @@ if (!attendanceColumns.includes('device_info')) {
 if (!attendanceColumns.includes('ip_address')) {
   db.exec('ALTER TABLE attendance ADD COLUMN ip_address TEXT');
 }
+if (!attendanceColumns.includes('risk_score')) {
+  db.exec('ALTER TABLE attendance ADD COLUMN risk_score INTEGER NOT NULL DEFAULT 0');
+}
+if (!attendanceColumns.includes('review_status')) {
+  // 'ok' | 'needs_review' | 'verified' | 'rejected'
+  db.exec("ALTER TABLE attendance ADD COLUMN review_status TEXT NOT NULL DEFAULT 'ok'");
+}
+if (!attendanceColumns.includes('reviewed_by')) {
+  db.exec('ALTER TABLE attendance ADD COLUMN reviewed_by INTEGER REFERENCES employees(id)');
+}
+if (!attendanceColumns.includes('reviewed_at')) {
+  db.exec('ALTER TABLE attendance ADD COLUMN reviewed_at TEXT');
+}
 
 // Seed default data on first run
 const positionCount = db.prepare('SELECT COUNT(*) AS c FROM positions').get().c;
