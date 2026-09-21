@@ -414,14 +414,16 @@ function resetAbsenForm() {
 async function loadHistory() {
   const { rows } = await api('/attendance/history');
   const tbody = document.querySelector('#table-riwayat tbody');
+  const name = state.employee ? state.employee.name : '-';
+  const nik = state.employee ? state.employee.nik || state.employee.nip || '-' : '-';
   tbody.innerHTML = rows
     .map(
       (r) => `<tr>
         <td>${r.timestamp}</td>
+        <td>${name}</td>
+        <td>${nik}</td>
         <td>${r.type === 'masuk' ? 'Masuk' : 'Pulang'}</td>
         <td>${r.note}</td>
-        <td>${r.device_info || '-'}</td>
-        <td>${r.ip_address || '-'}</td>
         <td>${r.fake_gps_flag ? '<span class="badge warn">Terindikasi</span>' : '<span class="badge ok">Normal</span>'}</td>
       </tr>`
     )
