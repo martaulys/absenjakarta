@@ -7,27 +7,6 @@ const EXACT_MATCH_EPSILON_DEG = 0.00003; // ~3m - treated as "identical" coordin
 const STATIC_SAMPLE_EPSILON_DEG = 0.000005; // ~0.5m - two same-checkin samples this close is unnaturally static
 const REVIEW_SCORE_THRESHOLD = 25; // combined weak signals reaching this score also trigger review
 
-/**
- * Find the registered office location nearest to a given coordinate.
- * @param {number} lat
- * @param {number} lng
- * @param {Array<{id:number, name:string, lat:number, lng:number, radius_meters:number}>} locations
- * @returns {{ location: object, distance: number } | null}
- */
-function findNearestLocation(lat, lng, locations) {
-  if (!locations || locations.length === 0) return null;
-  let nearest = null;
-  let nearestDistance = Infinity;
-  for (const loc of locations) {
-    const d = distanceMeters(lat, lng, loc.lat, loc.lng);
-    if (d < nearestDistance) {
-      nearestDistance = d;
-      nearest = loc;
-    }
-  }
-  return { location: nearest, distance: nearestDistance };
-}
-
 function isNearlyEqual(a, b, epsilon) {
   return Math.abs(a - b) <= epsilon;
 }
@@ -72,7 +51,7 @@ async function lookupIpLocation(ip) {
  * @param {number} p.lat
  * @param {number} p.lng
  * @param {number|null} p.accuracy - meters, from browser Geolocation API
- * @param {Array<object>} p.locations - all registered office locations { name, lat, lng, radius_meters }
+ * @param {{id:number,name:string,lat:number,lng:number,radius_meters:number}|null} p.selectedLocation - the office location the employee chose ("Lain-lain" -> null)
  * @param {object|null} p.lastAttendance - most recent previous attendance row for this employee { lat, lng, timestamp, accuracy }
  * @param {Array<object>} [p.recentOwnAttendance] - this employee's last N attendance rows, for repeat-coordinate checks
  * @param {boolean} [p.geoApiSuspicious] - client reported the Geolocation API looks tampered with
@@ -85,7 +64,7 @@ function evaluateFakeGps({
   lat,
   lng,
   accuracy,
-  locations,
+  selectedLocation,
   lastAttendance,
   recentOwnAttendance = [],
   geoApiSuspicious,
@@ -137,26 +116,25 @@ function evaluateFakeGps({
     }
   }
 
-  // --- 4. Distance to nearest registered office ---
+  // --- 4. Distance to the office location the employee selected ---
   let distanceFromLocation = null;
-  const nearest = findNearestLocation(lat, lng, locations);
-  if (nearest) {
-    distanceFromLocation = nearest.distance;
-    if (distanceFromLocation > nearest.location.radius_meters) {
+  if (selectedLocation) {
+    distanceFromLocation = distanceMeters(lat, lng, selectedLocation.lat, selectedLocation.lng);
+    if (distanceFromLocation > selectedLocation.radius_meters) {
       reasons.push(
-        `Lokasi absen berada ${Math.round(distanceFromLocation)}m dari lokasi terdaftar terdekat (${nearest.location.name}), melebihi radius ${nearest.location.radius_meters}m`
+        `Lokasi absen berada ${Math.round(distanceFromLocation)}m dari lokasi terdaftar (${selectedLocation.name}) yang dipilih, melebihi radius ${selectedLocation.radius_meters}m`
       );
       score += 25;
       severe = true;
     } else if (
       distanceFromLocation < 3 &&
-      isNearlyEqual(lat, nearest.location.lat, EXACT_MATCH_EPSILON_DEG) &&
-      isNearlyEqual(lng, nearest.location.lng, EXACT_MATCH_EPSILON_DEG)
+      isNearlyEqual(lat, selectedLocation.lat, EXACT_MATCH_EPSILON_DEG) &&
+      isNearlyEqual(lng, selectedLocation.lng, EXACT_MATCH_EPSILON_DEG)
     ) {
       // Coordinates essentially bit-identical to the office's stored point - real handheld
       // GPS almost never lands exactly on a manually-entered reference coordinate.
       reasons.push(
-        `Koordinat GPS nyaris identik persis dengan titik kantor terdaftar (${nearest.location.name}), tidak wajar untuk GPS perangkat nyata`
+        `Koordinat GPS nyaris identik persis dengan titik kantor terdaftar (${selectedLocation.name}), tidak wajar untuk GPS perangkat nyata`
       );
       score += 15;
     }
@@ -233,4 +211,4 @@ function evaluateFakeGps({
   return { flagged, needsReview: flagged, reasons, distanceFromLocation, riskScore: score };
 }
 
-module.exports = { evaluateFakeGps, findNearestLocation, lookupIpLocation };
+module.exports = { evaluateFakeGps, lookupIpLocation };

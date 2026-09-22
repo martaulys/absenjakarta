@@ -27,24 +27,35 @@ const upload = multer({
   },
 });
 
+router.get('/locations', requireAuth, (req, res) => {
+  const rows = db.prepare('SELECT id, name FROM locations ORDER BY name').all();
+  res.json({ rows });
+});
+
 router.post('/check-in', requireAuth, upload.single('photo'), async (req, res) => {
   try {
-    const { type, lat, lng, accuracy, note, geoApiSuspicious, lat2, lng2, sampleElapsedMs } = req.body;
+    const { type, lat, lng, accuracy, note, locationId, geoApiSuspicious, lat2, lng2, sampleElapsedMs } = req.body;
     if (!['masuk', 'pulang'].includes(type)) {
       return res.status(400).json({ error: 'Jenis absen tidak valid' });
     }
     if (!req.file) {
       return res.status(400).json({ error: 'Foto wajib diambil' });
     }
-    if (!note || !note.trim()) {
-      return res.status(400).json({ error: 'Catatan wajib diisi' });
-    }
     if (lat === undefined || lng === undefined) {
       return res.status(400).json({ error: 'Lokasi GPS wajib tersedia' });
     }
 
-    const emp = db.prepare('SELECT * FROM employees WHERE id = ?').get(req.session.employeeId);
     const locations = db.prepare('SELECT * FROM locations').all();
+    const selectedLocation = locationId ? locations.find((l) => String(l.id) === String(locationId)) || null : null;
+    const isLainLain = !selectedLocation;
+    if (locationId === undefined || locationId === '') {
+      return res.status(400).json({ error: 'Lokasi wajib dipilih' });
+    }
+    if (isLainLain && (!note || !note.trim())) {
+      return res.status(400).json({ error: 'Catatan wajib diisi untuk lokasi Lain-lain' });
+    }
+
+    const emp = db.prepare('SELECT * FROM employees WHERE id = ?').get(req.session.employeeId);
     const lastAttendance = db
       .prepare('SELECT * FROM attendance WHERE employee_id = ? ORDER BY timestamp DESC LIMIT 1')
       .get(emp.id);
@@ -94,7 +105,7 @@ router.post('/check-in', requireAuth, upload.single('photo'), async (req, res) =
       lat: parsedLat,
       lng: parsedLng,
       accuracy: parsedAccuracy,
-      locations,
+      selectedLocation,
       lastAttendance,
       recentOwnAttendance,
       geoApiSuspicious: geoApiSuspicious === 'true' || geoApiSuspicious === true,
@@ -105,11 +116,12 @@ router.post('/check-in', requireAuth, upload.single('photo'), async (req, res) =
 
     const relativePath = path.join('attendance', req.file.filename).replace(/\\/g, '/');
     const reviewStatus = flagged ? 'needs_review' : 'ok';
+    const locationLabel = selectedLocation ? selectedLocation.name : 'Lain-lain';
 
     const result = db
       .prepare(
-        `INSERT INTO attendance (employee_id, type, timestamp, lat, lng, accuracy, distance_from_location, photo_path, note, fake_gps_flag, fake_gps_reasons, device_info, ip_address, risk_score, review_status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO attendance (employee_id, type, timestamp, lat, lng, accuracy, distance_from_location, photo_path, note, fake_gps_flag, fake_gps_reasons, device_info, ip_address, risk_score, review_status, location_id, location_label)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         emp.id,
@@ -120,13 +132,15 @@ router.post('/check-in', requireAuth, upload.single('photo'), async (req, res) =
         parsedAccuracy,
         distanceFromLocation,
         relativePath,
-        note.trim(),
+        (note || '').trim(),
         flagged ? 1 : 0,
         reasons.join('; '),
         deviceInfo,
         clientIp,
         riskScore,
-        reviewStatus
+        reviewStatus,
+        selectedLocation ? selectedLocation.id : null,
+        locationLabel
       );
 
     res.json({
@@ -142,9 +156,15 @@ router.post('/check-in', requireAuth, upload.single('photo'), async (req, res) =
 });
 
 router.get('/history', requireAuth, (req, res) => {
-  const rows = db
-    .prepare('SELECT * FROM attendance WHERE employee_id = ? ORDER BY timestamp DESC LIMIT 100')
-    .all(req.session.employeeId);
+  const { start, end } = req.query;
+  let query = 'SELECT * FROM attendance WHERE employee_id = ?';
+  const params = [req.session.employeeId];
+  if (start && end) {
+    query += ' AND date(timestamp) BETWEEN ? AND ?';
+    params.push(start, end);
+  }
+  query += ' ORDER BY timestamp DESC LIMIT 200';
+  const rows = db.prepare(query).all(...params);
   res.json({ rows });
 });
 

@@ -28,22 +28,27 @@ router.get('/summary', (req, res) => {
   const checkedInToday = db
     .prepare("SELECT COUNT(DISTINCT employee_id) c FROM attendance WHERE type = 'masuk' AND timestamp LIKE ?")
     .get(`${today}%`).c;
-  const pendingLeave = db.prepare("SELECT COUNT(*) c FROM leave_requests WHERE status = 'pending'").get().c;
   const fakeGpsToday = db
     .prepare('SELECT COUNT(*) c FROM attendance WHERE fake_gps_flag = 1 AND timestamp LIKE ?')
     .get(`${today}%`).c;
   const pendingReview = db.prepare("SELECT COUNT(*) c FROM attendance WHERE review_status = 'needs_review'").get().c;
-  res.json({ totalEmployees, checkedInToday, pendingLeave, fakeGpsToday, pendingReview });
+  res.json({ totalEmployees, checkedInToday, fakeGpsToday, pendingReview });
 });
 
 router.get('/attendance', (req, res) => {
-  const { start, end } = req.query;
+  const { start, end, employeeId } = req.query;
   let query = `SELECT a.*, e.name, e.nik, e.nip FROM attendance a JOIN employees e ON e.id = a.employee_id`;
+  const conditions = [];
   const params = [];
   if (start && end) {
-    query += ' WHERE date(a.timestamp) BETWEEN ? AND ?';
+    conditions.push('date(a.timestamp) BETWEEN ? AND ?');
     params.push(start, end);
   }
+  if (employeeId) {
+    conditions.push('a.employee_id = ?');
+    params.push(employeeId);
+  }
+  if (conditions.length) query += ' WHERE ' + conditions.join(' AND ');
   query += ' ORDER BY a.timestamp DESC LIMIT 500';
   const rows = db.prepare(query).all(...params);
   res.json({ rows });
@@ -351,25 +356,157 @@ router.get('/activity-log', (req, res) => {
   res.json({ rows });
 });
 
-// ---- Excel export ----
-router.get('/export/attendance', async (req, res) => {
-  const { start, end } = req.query;
-  let attendanceQuery = `SELECT a.*, e.name, e.nik, e.nip FROM attendance a JOIN employees e ON e.id = a.employee_id`;
-  let leaveQuery = `SELECT lr.*, e.name, e.nik, e.nip FROM leave_requests lr JOIN employees e ON e.id = lr.employee_id`;
-  const params = [];
-  if (start && end) {
-    attendanceQuery += ' WHERE date(a.timestamp) BETWEEN ? AND ?';
-    leaveQuery += ' WHERE lr.start_date <= ? AND lr.end_date >= ?';
-    params.push(start, end);
+// ---- Hari Libur (tanggal merah) ----
+router.get('/holidays', (req, res) => {
+  res.json({ rows: db.prepare('SELECT * FROM holidays ORDER BY date').all() });
+});
+router.post('/holidays', (req, res) => {
+  const { date, name } = req.body;
+  if (!date) return res.status(400).json({ error: 'Tanggal wajib diisi' });
+  db.prepare('INSERT INTO holidays (date, name) VALUES (?, ?) ON CONFLICT(date) DO UPDATE SET name = excluded.name').run(
+    date,
+    name || null
+  );
+  res.json({ ok: true });
+});
+router.delete('/holidays/:date', (req, res) => {
+  db.prepare('DELETE FROM holidays WHERE date = ?').run(req.params.date);
+  res.json({ ok: true });
+});
+
+const holidayUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+function parseExcelDateToSql(value) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    const y = value.getUTCFullYear();
+    const m = String(value.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(value.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   }
-  attendanceQuery += ' ORDER BY a.timestamp DESC';
-  leaveQuery += ' ORDER BY lr.start_date DESC';
+  const str = String(value.text !== undefined ? value.text : value).trim();
+  if (!str) return null;
+  let m = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  return null;
+}
 
-  const attendanceRows = db.prepare(attendanceQuery).all(...(start && end ? [start, end] : []));
-  const leaveRows = db.prepare(leaveQuery).all(...(start && end ? [end, start] : []));
+router.post('/holidays/import', holidayUpload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'File Excel wajib diunggah' });
+  let workbook;
+  try {
+    workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(req.file.buffer);
+  } catch (err) {
+    return res.status(400).json({ error: 'File Excel tidak valid atau rusak: ' + err.message });
+  }
+  const sheet = workbook.worksheets[0];
+  if (!sheet) return res.status(400).json({ error: 'Sheet tidak ditemukan dalam file' });
 
+  const upsert = db.prepare('INSERT INTO holidays (date, name) VALUES (?, ?) ON CONFLICT(date) DO UPDATE SET name = excluded.name');
+  let inserted = 0;
+  const errors = [];
+  sheet.eachRow((row, idx) => {
+    if (idx === 1) return; // header
+    const dateValue = row.getCell(1).value;
+    const name = String(row.getCell(2).value || '').trim() || null;
+    const sqlDate = parseExcelDateToSql(dateValue);
+    if (!sqlDate) {
+      if (dateValue) errors.push(`Baris ${idx}: format tanggal tidak dikenali`);
+      return;
+    }
+    upsert.run(sqlDate, name);
+    inserted++;
+  });
+  res.json({ inserted, errors });
+});
+
+// ---- Excel export ----
+const DAY_NAMES_ID = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+
+function formatDateLabel(sqlDate) {
+  const [y, m, d] = sqlDate.split('-').map(Number);
+  const dow = new Date(y, m - 1, d).getDay();
+  return `${DAY_NAMES_ID[dow]}, ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
+}
+
+function defaultMonthRange() {
+  const today = todayJakarta();
+  const [y, m] = today.split('-');
+  const start = `${y}-${m}-01`;
+  const lastDay = new Date(Number(y), Number(m), 0).getDate();
+  const end = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+  return { start, end };
+}
+
+function buildAttendanceMatrix({ start, end, employeeId }) {
+  const employees = db
+    .prepare(`SELECT * FROM employees WHERE role = 'employee' ${employeeId ? 'AND id = ?' : ''} ORDER BY name`)
+    .all(...(employeeId ? [employeeId] : []));
+  const holidaySet = new Set(db.prepare('SELECT date FROM holidays').all().map((h) => h.date));
+  const attendanceRows = db
+    .prepare(
+      `SELECT * FROM attendance WHERE employee_id IN (${employees.map(() => '?').join(',') || 'NULL'}) AND date(timestamp) BETWEEN ? AND ? ORDER BY timestamp ASC`
+    )
+    .all(...employees.map((e) => e.id), start, end);
+
+  // key `${employee_id}_${date}` -> { masuk, pulang } (earliest masuk, latest pulang that day)
+  const byEmpDate = {};
+  attendanceRows.forEach((r) => {
+    const date = r.timestamp.slice(0, 10);
+    const key = `${r.employee_id}_${date}`;
+    if (!byEmpDate[key]) byEmpDate[key] = { masuk: null, pulang: null };
+    if (r.type === 'masuk' && !byEmpDate[key].masuk) byEmpDate[key].masuk = r;
+    if (r.type === 'pulang') byEmpDate[key].pulang = r;
+  });
+
+  const dates = [];
+  let cursor = new Date(start + 'T00:00:00');
+  const endDate = new Date(end + 'T00:00:00');
+  while (cursor <= endDate) {
+    const y = cursor.getFullYear();
+    const m = String(cursor.getMonth() + 1).padStart(2, '0');
+    const d = String(cursor.getDate()).padStart(2, '0');
+    dates.push(`${y}-${m}-${d}`);
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  const rows = [];
+  employees.forEach((emp) => {
+    dates.forEach((date) => {
+      const dow = new Date(date + 'T00:00:00').getDay();
+      const isWeekend = dow === 0 || dow === 6;
+      const isHoliday = holidaySet.has(date);
+      const entry = byEmpDate[`${emp.id}_${date}`] || { masuk: null, pulang: null };
+      const primary = entry.masuk || entry.pulang;
+      const flagged = (entry.masuk && entry.masuk.fake_gps_flag) || (entry.pulang && entry.pulang.fake_gps_flag);
+      rows.push({
+        name: emp.name,
+        nik: emp.nik || emp.nip || '-',
+        dateLabel: formatDateLabel(date),
+        isNonWorking: isWeekend || isHoliday,
+        jamMasuk: entry.masuk ? entry.masuk.timestamp.slice(11, 16) : '',
+        jamPulang: entry.pulang ? entry.pulang.timestamp.slice(11, 16) : '',
+        lokasi: primary ? primary.location_label || '-' : '-',
+        catatan: primary ? primary.note || '-' : '-',
+        lat: primary ? primary.lat : null,
+        lng: primary ? primary.lng : null,
+        photoPath: primary ? primary.photo_path : null,
+        status: primary ? (flagged ? 'Terindikasi' : 'Normal') : '-',
+      });
+    });
+  });
+  return rows;
+}
+
+router.get('/export/attendance', async (req, res) => {
+  const { employeeId } = req.query;
+  const { start, end } = req.query.start && req.query.end ? req.query : defaultMonthRange();
+  const rows = buildAttendanceMatrix({ start, end, employeeId });
   const baseUrl = `${req.protocol}://${req.get('host')}`;
-  const workbook = await buildAttendanceWorkbook({ attendanceRows, leaveRows, baseUrl });
+  const workbook = await buildAttendanceWorkbook({ rows, baseUrl });
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename="riwayat-absen.xlsx"');
   await workbook.xlsx.write(res);

@@ -169,6 +169,15 @@ input:disabled, select:disabled, textarea:disabled {
 .filter-row input { width: auto; }
 .filter-row button { background: var(--primary); color: white; }
 
+.filter-panel {
+  display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap;
+  background: #f4f6f9; border-radius: 10px; padding: 14px; margin-bottom: 12px;
+}
+.filter-panel label { margin: 0; font-size: 13px; font-weight: 600; }
+.filter-panel input, .filter-panel select { width: auto; min-width: 150px; }
+.filter-panel .form-actions { margin: 0; }
+.filter-panel .form-actions button { flex: none; }
+
 .form-actions { display: flex; gap: 8px; margin-top: 16px; }
 .form-actions button { flex: 1; margin-top: 0; }
 

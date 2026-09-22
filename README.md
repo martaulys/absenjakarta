@@ -1,6 +1,6 @@
 # Absen Lokasi Jakarta — Tritronik
 
-Aplikasi absensi karyawan berbasis web mandiri (Node.js/Express + SQLite), dengan foto kehadiran, deteksi lokasi, heuristik anti-fake-GPS, pengajuan izin, dan dashboard admin.
+Aplikasi absensi karyawan berbasis web mandiri (Node.js/Express + SQLite) untuk absen masuk/pulang, dengan foto kehadiran, deteksi lokasi, heuristik anti-fake-GPS, dan dashboard admin.
 
 Aplikasi ini **standalone** — tidak lagi bergantung pada `window.claude` (Claude Artifact API). Semua data, foto, dan file Excel diproses oleh server Node.js sendiri.
 
@@ -34,16 +34,16 @@ Akun admin default dibuat otomatis saat pertama kali dijalankan (jika belum ada 
 ## Fitur
 
 - Login karyawan per akun (email + password), dengan akun admin khusus
-- Absen masuk/pulang: foto langsung dari kamera (wajib), deteksi lokasi GPS, catatan wajib
-- Multi-lokasi kantor (mis. Jakarta & Bandung) — saat absen, sistem mencari lokasi kantor **terdekat** dari seluruh daftar di Kelola Lokasi, bukan hanya satu lokasi yang di-assign ke karyawan
-- Deteksi mock-location berbasis skor multi-sinyal (server-side, tidak bisa dipengaruhi client): akurasi GPS rendah/tidak ada/statis berulang, koordinat identik persis dengan titik kantor atau absen sebelumnya (GPS asli selalu punya jitter kecil), dua pembacaan GPS berturut-turut tanpa variasi alami, kecepatan perpindahan tidak masuk akal, di luar radius seluruh lokasi kantor terdaftar, API geolocation browser terindikasi dimodifikasi, lokasi dari alamat IP yang jauh berbeda dari koordinat GPS, serta perangkat/IP yang sama dipakai beberapa karyawan berbeda dalam waktu berdekatan (indikasi titip absen). Absen yang mencurigakan otomatis ditandai **"Perlu Verifikasi Admin"** dan admin bisa menandainya Terverifikasi/Ditolak dari Riwayat Absensi (tercatat di Log Aktivitas)
-- Riwayat Absensi mencatat jenis perangkat (OS + browser) dan alamat IP setiap absen, terlihat oleh karyawan (riwayat sendiri) dan admin (semua karyawan)
+- Absen masuk/pulang: foto langsung dari kamera (wajib), deteksi lokasi GPS, dan pemilihan **Lokasi** dari daftar lokasi kantor terdaftar (atau **Lain-lain** untuk lokasi di luar kantor — wajib mengisi Catatan bila memilih ini; catatan tidak ditampilkan/wajib bila memilih lokasi terdaftar)
+- Multi-lokasi kantor (mis. Jakarta & Bandung) — validasi radius & jarak dilakukan terhadap lokasi yang **dipilih langsung oleh karyawan** saat absen, bukan sekadar lokasi terdekat
+- Deteksi mock-location berbasis skor multi-sinyal (server-side, tidak bisa dipengaruhi client): akurasi GPS rendah/tidak ada/statis berulang, koordinat identik persis dengan titik kantor atau absen sebelumnya (GPS asli selalu punya jitter kecil), dua pembacaan GPS berturut-turut tanpa variasi alami, kecepatan perpindahan tidak masuk akal, di luar radius lokasi kantor yang dipilih, API geolocation browser terindikasi dimodifikasi, lokasi dari alamat IP yang jauh berbeda dari koordinat GPS, serta perangkat/IP yang sama dipakai beberapa karyawan berbeda dalam waktu berdekatan (indikasi titip absen). Absen yang mencurigakan otomatis ditandai **"Perlu Verifikasi Admin"** (ditampilkan sebagai **Terindikasi**/**Normal**, tanpa menampilkan skor mentah) dan admin bisa menandainya Terverifikasi/Ditolak dari Riwayat Absensi (tercatat di Log Aktivitas)
+- Riwayat Absensi mencatat jenis perangkat (OS + browser) dan alamat IP setiap absen, terlihat oleh karyawan (riwayat sendiri, dengan filter tanggal) dan admin (semua karyawan, dengan filter Nama dan Tanggal via tombol Filter)
 - Semua waktu absen/aktivitas dicatat dalam zona waktu Jakarta (WIB/UTC+7), konsisten dengan jam yang tampil di halaman absen
 - Lokasi kerja (mis. Jakarta/Bandung) dapat diatur admin per karyawan lewat Kelola Karyawan
-- Pengajuan izin/sakit dengan rentang tanggal dan unggah bukti (surat sakit/acc atasan)
+- Kelola Hari Libur: Sabtu/Minggu otomatis dianggap libur; admin dapat menambah tanggal merah lain satu per satu atau **import Excel** untuk daftar tanggal merah satu tahun sekaligus
 - Reset password mandiri ("Lupa password?") dengan aturan minimal 8 karakter + huruf kapital + angka, tercatat di log aktivitas admin
-- Dashboard admin: ringkasan, riwayat absensi (filter tanggal), kelola karyawan (tambah/edit/nonaktifkan dengan tanggal keluar), kelola lokasi kantor, kelola jabatan, log aktivitas
-- Unduh data ke Excel: absensi+izin (dengan filter tanggal) dan data karyawan (dengan status aktif/non-aktif), dengan pewarnaan sel via ExcelJS
+- Dashboard admin: ringkasan, riwayat absensi (filter Nama & tanggal), kelola karyawan (tambah/edit/nonaktifkan dengan tanggal keluar), kelola lokasi kantor, kelola jabatan, kelola hari libur, log aktivitas
+- Unduh Riwayat Absen ke Excel: satu baris per karyawan per tanggal dalam rentang yang dipilih (default bulan berjalan), kolom Nama, NIK, Tanggal (format "Hari, dd/mm/yyyy"), Jam Absen Masuk, Jam Absen Pulang, Lokasi, Catatan, Latitude, Longitude, Bukti Foto, Status. Sabtu/Minggu dan tanggal merah ditandai merah satu baris penuh; jika absen masuk atau pulang tidak ada pada hari kerja, kolom Tanggal dan kolom jam yang kosong ditandai merah. Data karyawan juga bisa diunduh terpisah (dengan status aktif/non-aktif)
 
 ## Arsitektur
 

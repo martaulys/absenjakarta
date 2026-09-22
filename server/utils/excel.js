@@ -2,7 +2,7 @@ const ExcelJS = require('exceljs');
 
 const HEADER_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1565C0' } };
 const HEADER_FONT = { bold: true, color: { argb: 'FFFFFFFF' } };
-const FILL_WARN = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCDD2' } }; // merah muda
+const FILL_RED = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCDD2' } }; // merah muda - libur/kosong
 const FILL_OK = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBBDEFB' } }; // biru muda
 const BORDER = { style: 'thin', color: { argb: 'FFE0E4E9' } };
 
@@ -35,55 +35,67 @@ function proofLink(sheet, cellRef, baseUrl, relativePath, label) {
   sheet.getCell(cellRef).font = { color: { argb: 'FF1565C0' }, underline: true };
 }
 
-async function buildAttendanceWorkbook({ attendanceRows, leaveRows, baseUrl }) {
+/**
+ * @param {object} p
+ * @param {Array<object>} p.rows - one row per employee+date, shaped by buildAttendanceMatrix() in routes/admin.js
+ * @param {string} p.baseUrl
+ */
+async function buildAttendanceWorkbook({ rows, baseUrl }) {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('Riwayat Absen', { views: [{ state: 'frozen', ySplit: 1 }] });
 
   sheet.columns = [
-    { header: 'Nama Lengkap', key: 'name', width: 26 },
-    { header: 'NIK/NIP', key: 'nik', width: 16 },
-    { header: 'Tanggal', key: 'date', width: 20 },
-    { header: 'Jenis', key: 'jenis', width: 16 },
-    { header: 'Catatan/Keterangan', key: 'catatan', width: 34 },
-    { header: 'Bukti/Foto', key: 'bukti', width: 16 },
-    { header: 'Status', key: 'status', width: 26 },
+    { header: 'Nama', key: 'name', width: 24 },
+    { header: 'NIK', key: 'nik', width: 14 },
+    { header: 'Tanggal', key: 'date', width: 22 },
+    { header: 'Jam Absen Masuk', key: 'jamMasuk', width: 15 },
+    { header: 'Jam Absen Pulang', key: 'jamPulang', width: 15 },
+    { header: 'Lokasi', key: 'lokasi', width: 20 },
+    { header: 'Catatan', key: 'catatan', width: 28 },
+    { header: 'Latitude', key: 'lat', width: 14 },
+    { header: 'Longitude', key: 'lng', width: 14 },
+    { header: 'Bukti Foto', key: 'bukti', width: 14 },
+    { header: 'Status', key: 'status', width: 16 },
   ];
   styleHeaderRow(sheet.getRow(1));
-  sheet.autoFilter = { from: 'A1', to: 'G1' };
+  sheet.autoFilter = { from: 'A1', to: 'K1' };
 
-  attendanceRows.forEach((row) => {
+  rows.forEach((r) => {
     const excelRow = sheet.addRow({
-      name: row.name,
-      nik: row.nik || row.nip || '-',
-      date: row.timestamp,
-      jenis: row.type === 'masuk' ? 'Absen Masuk' : 'Absen Pulang',
-      catatan: row.note || '-',
+      name: r.name,
+      nik: r.nik || '-',
+      date: r.dateLabel,
+      jamMasuk: r.jamMasuk || '',
+      jamPulang: r.jamPulang || '',
+      lokasi: r.lokasi || '-',
+      catatan: r.catatan || '-',
+      lat: r.lat != null ? r.lat : '-',
+      lng: r.lng != null ? r.lng : '-',
       bukti: '',
-      status: row.fake_gps_flag ? `Terindikasi Fake GPS: ${row.fake_gps_reasons || ''}` : 'Normal',
+      status: r.status || '-',
     });
-    proofLink(sheet, `F${excelRow.number}`, baseUrl, row.photo_path, 'Lihat Foto');
+    proofLink(sheet, `J${excelRow.number}`, baseUrl, r.photoPath, 'Lihat Foto');
     styleDataRow(excelRow);
-    excelRow.getCell('jenis').fill = FILL_OK;
-    if (row.fake_gps_flag) {
-      excelRow.getCell('status').fill = FILL_WARN;
-    }
-  });
 
-  leaveRows.forEach((row) => {
-    const excelRow = sheet.addRow({
-      name: row.name,
-      nik: row.nik || row.nip || '-',
-      date: `${row.start_date} s.d. ${row.end_date}`,
-      jenis: row.type === 'sakit' ? 'Sakit' : 'Izin',
-      catatan: row.reason || '-',
-      bukti: '',
-      status: row.status === 'approved' ? 'Disetujui' : row.status === 'rejected' ? 'Ditolak' : 'Pending',
-    });
-    proofLink(sheet, `F${excelRow.number}`, baseUrl, row.proof_path, 'Lihat Bukti');
-    styleDataRow(excelRow);
-    excelRow.getCell('jenis').fill = FILL_WARN;
-    if (row.status === 'pending') {
-      excelRow.getCell('status').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF3E0' } };
+    if (r.isNonWorking) {
+      // Hari libur (Sabtu/Minggu atau tanggal merah) - seluruh baris ditandai merah
+      excelRow.eachCell((cell) => {
+        cell.fill = FILL_RED;
+      });
+    } else {
+      if (!r.jamMasuk) {
+        excelRow.getCell('date').fill = FILL_RED;
+        excelRow.getCell('jamMasuk').fill = FILL_RED;
+      }
+      if (!r.jamPulang) {
+        excelRow.getCell('date').fill = FILL_RED;
+        excelRow.getCell('jamPulang').fill = FILL_RED;
+      }
+      if (r.status === 'Terindikasi') {
+        excelRow.getCell('status').fill = FILL_RED;
+      } else if (r.status === 'Normal') {
+        excelRow.getCell('status').fill = FILL_OK;
+      }
     }
   });
 
@@ -119,7 +131,7 @@ async function buildEmployeeWorkbook({ employees }) {
       exitDate: emp.exit_date || '-',
     });
     styleDataRow(excelRow);
-    excelRow.getCell('status').fill = emp.active ? FILL_OK : FILL_WARN;
+    excelRow.getCell('status').fill = emp.active ? FILL_OK : FILL_RED;
   });
 
   return workbook;

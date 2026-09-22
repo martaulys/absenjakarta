@@ -60,7 +60,6 @@
   </header>
   <nav class="tabs">
     <button class="tab-btn active" data-tab="absen">Absen</button>
-    <button class="tab-btn" data-tab="izin">Izin/Sakit</button>
     <button class="tab-btn" data-tab="riwayat">Riwayat</button>
     <button class="tab-btn" data-tab="profil">Profil</button>
   </nav>
@@ -87,8 +86,14 @@
         <button type="button" id="btn-retake" class="hidden">Ambil Ulang</button>
       </div>
       <div id="location-status" class="location-status">Lokasi belum terdeteksi</div>
-      <label>Catatan (wajib)</label>
-      <textarea id="absen-note" placeholder="Contoh: absen masuk shift pagi"></textarea>
+      <label>Lokasi</label>
+      <select id="absen-location">
+        <option value="">Pilih lokasi...</option>
+      </select>
+      <div id="absen-note-wrap" class="hidden">
+        <label>Catatan (wajib)</label>
+        <textarea id="absen-note" placeholder="Contoh: kunjungan klien di alamat X"></textarea>
+      </div>
       <div class="absen-buttons">
         <button type="button" class="btn-primary" id="btn-absen-masuk" disabled>Absen Masuk</button>
         <button type="button" class="btn-primary" id="btn-absen-pulang" disabled>Absen Pulang</button>
@@ -97,40 +102,22 @@
     </div>
   </div>
 
-  <div id="tab-izin" class="tab-content hidden">
-    <div class="card">
-      <h2>Ajukan Izin / Sakit</h2>
-      <form id="form-leave">
-        <label>Jenis</label>
-        <select id="leave-type">
-          <option value="izin">Izin</option>
-          <option value="sakit">Sakit</option>
-        </select>
-        <label>Tanggal Mulai</label>
-        <input type="date" id="leave-start" required />
-        <label>Tanggal Selesai</label>
-        <input type="date" id="leave-end" required />
-        <label>Alasan</label>
-        <textarea id="leave-reason" required></textarea>
-        <label>Bukti (surat sakit / acc atasan)</label>
-        <input type="file" id="leave-proof" accept="image/*,.pdf" />
-        <button type="submit" class="btn-primary">Ajukan</button>
-      </form>
-    </div>
-    <div class="card">
-      <h2>Riwayat Pengajuan</h2>
-      <table class="table" id="table-leave-mine">
-        <thead><tr><th>Tanggal</th><th>Jenis</th><th>Alasan</th><th>Status</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </div>
-
   <div id="tab-riwayat" class="tab-content hidden">
     <div class="card">
       <h2>Riwayat Absensi</h2>
+      <div class="filter-row">
+        <button type="button" id="btn-toggle-filter-emp" class="btn-secondary">Filter</button>
+      </div>
+      <div id="filter-panel-emp" class="filter-panel hidden">
+        <label>Dari</label><input type="date" id="filter-emp-start" />
+        <label>Sampai</label><input type="date" id="filter-emp-end" />
+        <div class="form-actions">
+          <button type="button" id="btn-apply-filter-emp">Terapkan</button>
+          <button type="button" id="btn-reset-filter-emp" class="btn-secondary">Reset</button>
+        </div>
+      </div>
       <table class="table" id="table-riwayat">
-        <thead><tr><th>Waktu</th><th>Nama</th><th>NIK</th><th>Jenis</th><th>Catatan</th><th>Indikasi</th></tr></thead>
+        <thead><tr><th>Waktu</th><th>Nama</th><th>NIK</th><th>Jenis</th><th>Lokasi</th><th>Catatan</th><th>Indikasi</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -175,10 +162,10 @@
   <nav class="tabs">
     <button class="tab-btn active" data-atab="ringkasan">Ringkasan</button>
     <button class="tab-btn" data-atab="riwayat-admin">Riwayat</button>
-    <button class="tab-btn" data-atab="izin-admin">Izin/Sakit</button>
     <button class="tab-btn" data-atab="karyawan">Karyawan</button>
     <button class="tab-btn" data-atab="lokasi">Lokasi</button>
     <button class="tab-btn" data-atab="jabatan">Jabatan</button>
+    <button class="tab-btn" data-atab="hari-libur">Hari Libur</button>
     <button class="tab-btn" data-atab="aktivitas">Aktivitas</button>
     <button class="tab-btn" data-atab="profil-admin">Profil</button>
   </nav>
@@ -187,7 +174,6 @@
     <div class="summary-grid">
       <div class="summary-card"><div class="summary-num" id="sum-total">0</div><div>Total Karyawan Aktif</div></div>
       <div class="summary-card"><div class="summary-num" id="sum-checkin">0</div><div>Absen Masuk Hari Ini</div></div>
-      <div class="summary-card"><div class="summary-num" id="sum-pending">0</div><div>Izin Pending</div></div>
       <div class="summary-card"><div class="summary-num" id="sum-fake">0</div><div>Indikasi Fake GPS Hari Ini</div></div>
       <div class="summary-card"><div class="summary-num" id="sum-review">0</div><div>Perlu Verifikasi Admin</div></div>
     </div>
@@ -197,23 +183,21 @@
     <div class="card">
       <h2>Riwayat Absensi</h2>
       <div class="filter-row">
-        <label>Dari</label><input type="date" id="filter-start" />
-        <label>Sampai</label><input type="date" id="filter-end" />
-        <button id="btn-filter-attendance">Terapkan</button>
+        <button type="button" id="btn-toggle-filter-admin" class="btn-secondary">Filter</button>
         <button id="btn-export-attendance" class="btn-secondary">Unduh Excel</button>
       </div>
+      <div id="filter-panel-admin" class="filter-panel hidden">
+        <label>Nama</label>
+        <select id="filter-employee"><option value="">Semua Karyawan</option></select>
+        <label>Dari</label><input type="date" id="filter-start" />
+        <label>Sampai</label><input type="date" id="filter-end" />
+        <div class="form-actions">
+          <button type="button" id="btn-filter-attendance">Terapkan</button>
+          <button type="button" id="btn-reset-filter-admin" class="btn-secondary">Reset</button>
+        </div>
+      </div>
       <table class="table" id="table-attendance-admin">
-        <thead><tr><th>Waktu</th><th>Nama</th><th>NIK/NIP</th><th>Jenis</th><th>Catatan</th><th>Perangkat</th><th>IP</th><th>Indikasi</th><th>Verifikasi</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </div>
-
-  <div id="atab-izin-admin" class="tab-content hidden">
-    <div class="card">
-      <h2>Pengajuan Izin/Sakit</h2>
-      <table class="table" id="table-leave-admin">
-        <thead><tr><th>Nama</th><th>Jenis</th><th>Tanggal</th><th>Alasan</th><th>Bukti</th><th>Status</th><th>Aksi</th></tr></thead>
+        <thead><tr><th>Waktu</th><th>Nama</th><th>NIK/NIP</th><th>Jenis</th><th>Lokasi</th><th>Catatan</th><th>Perangkat</th><th>IP</th><th>Indikasi</th><th>Verifikasi</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -289,6 +273,24 @@
       </form>
       <table class="table" id="table-positions">
         <thead><tr><th>Nama</th><th>Aksi</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="atab-hari-libur" class="tab-content hidden">
+    <div class="card">
+      <h2>Kelola Hari Libur (Tanggal Merah)</h2>
+      <p class="field-hint">Sabtu dan Minggu otomatis dianggap hari libur. Gunakan ini untuk menambahkan tanggal merah lain (nasional/cuti bersama). Import Excel: kolom Tanggal (dd/mm/yyyy) dan Keterangan.</p>
+      <button id="btn-import-holidays" class="btn-secondary">Import Excel (1 Tahun)</button>
+      <input type="file" id="import-holidays-file" accept=".xlsx" class="hidden" />
+      <form id="form-holiday">
+        <label>Tanggal</label><input type="date" id="holiday-date" required />
+        <label>Keterangan</label><input type="text" id="holiday-name" placeholder="Contoh: Hari Kemerdekaan" />
+        <button type="submit" class="btn-primary">Tambah Tanggal Merah</button>
+      </form>
+      <table class="table" id="table-holidays">
+        <thead><tr><th>Tanggal</th><th>Keterangan</th><th>Aksi</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>

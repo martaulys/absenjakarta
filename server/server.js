@@ -8,7 +8,6 @@ require('./db'); // ensure DB initialized/seeded before routes load
 
 const authRoutes = require('./routes/auth');
 const attendanceRoutes = require('./routes/attendance');
-const leaveRoutes = require('./routes/leave');
 const adminRoutes = require('./routes/admin');
 
 const app = express();
@@ -55,7 +54,6 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/attendance', attendanceRoutes);
-app.use('/api/leave', leaveRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Endpoint API yang tidak cocok -> 404 JSON, bukan halaman HTML

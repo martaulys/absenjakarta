@@ -7,6 +7,8 @@ const state = {
   geoApiSuspicious: false,
   positions: [],
   locations: [],
+  absenLocations: [],
+  employees: [],
   editingEmployeeId: null,
   deactivatingEmployeeId: null,
 };
@@ -123,7 +125,7 @@ async function enterApp() {
     document.getElementById('emp-name').textContent = state.employee.name;
     showView('view-employee');
     loadHistory();
-    loadMyLeave();
+    loadAbsenLocations();
     startClock();
     updateAbsenButtonsState();
   }
@@ -296,9 +298,28 @@ document.getElementById('btn-retake').onclick = () => {
 
 document.getElementById('absen-note').addEventListener('input', updateAbsenButtonsState);
 
+async function loadAbsenLocations() {
+  const { rows } = await api('/attendance/locations');
+  state.absenLocations = rows;
+  const select = document.getElementById('absen-location');
+  select.innerHTML =
+    '<option value="">Pilih lokasi...</option>' +
+    rows.map((l) => `<option value="${l.id}">${l.name}</option>`).join('') +
+    '<option value="lain-lain">Lain-lain</option>';
+}
+
+document.getElementById('absen-location').addEventListener('change', (e) => {
+  const isLainLain = e.target.value === 'lain-lain';
+  document.getElementById('absen-note-wrap').classList.toggle('hidden', !isLainLain);
+  if (!isLainLain) document.getElementById('absen-note').value = '';
+  updateAbsenButtonsState();
+});
+
 function updateAbsenButtonsState() {
+  const locationChoice = document.getElementById('absen-location').value;
+  const isLainLain = locationChoice === 'lain-lain';
   const note = document.getElementById('absen-note').value.trim();
-  const ready = !!state.capturedBlob && !!state.currentPosition && !!note;
+  const ready = !!state.capturedBlob && !!state.currentPosition && !!locationChoice && (!isLainLain || !!note);
   document.getElementById('btn-absen-masuk').disabled = !ready;
   document.getElementById('btn-absen-pulang').disabled = !ready;
 }
@@ -369,8 +390,11 @@ async function submitAbsen(type) {
   try {
     if (!state.capturedBlob) return toast('Ambil foto terlebih dahulu', true);
     if (!state.currentPosition) return toast('Lokasi belum terdeteksi', true);
+    const locationId = document.getElementById('absen-location').value;
+    if (!locationId) return toast('Lokasi wajib dipilih', true);
+    const isLainLain = locationId === 'lain-lain';
     const note = document.getElementById('absen-note').value;
-    if (!note.trim()) return toast('Catatan wajib diisi', true);
+    if (isLainLain && !note.trim()) return toast('Catatan wajib diisi untuk lokasi Lain-lain', true);
 
     const fd = new FormData();
     fd.append('photo', state.capturedBlob, 'absen.jpg');
@@ -378,6 +402,7 @@ async function submitAbsen(type) {
     fd.append('lat', state.currentPosition.latitude);
     fd.append('lng', state.currentPosition.longitude);
     fd.append('accuracy', state.currentPosition.accuracy);
+    fd.append('locationId', locationId);
     fd.append('note', note);
     fd.append('geoApiSuspicious', state.geoApiSuspicious ? 'true' : 'false');
     if (state.secondPosition) {
@@ -408,6 +433,8 @@ function resetAbsenForm() {
   state.locationAddress = null;
   state.geoApiSuspicious = false;
   document.getElementById('absen-note').value = '';
+  document.getElementById('absen-location').value = '';
+  document.getElementById('absen-note-wrap').classList.add('hidden');
   document.getElementById('captured-photo').classList.add('hidden');
   document.getElementById('btn-retake').classList.add('hidden');
   document.getElementById('btn-start-camera').classList.remove('hidden');
@@ -422,7 +449,10 @@ function resetAbsenForm() {
 }
 
 async function loadHistory() {
-  const { rows } = await api('/attendance/history');
+  const start = document.getElementById('filter-emp-start').value;
+  const end = document.getElementById('filter-emp-end').value;
+  const qs = start && end ? `?start=${start}&end=${end}` : '';
+  const { rows } = await api('/attendance/history' + qs);
   const tbody = document.querySelector('#table-riwayat tbody');
   const name = state.employee ? state.employee.name : '-';
   const nik = state.employee ? state.employee.nik || state.employee.nip || '-' : '-';
@@ -433,6 +463,7 @@ async function loadHistory() {
         <td>${name}</td>
         <td>${nik}</td>
         <td>${r.type === 'masuk' ? 'Masuk' : 'Pulang'}</td>
+        <td>${r.location_label || '-'}</td>
         <td>${r.note}</td>
         <td>${r.fake_gps_flag ? '<span class="badge warn">Terindikasi</span>' : '<span class="badge ok">Normal</span>'}</td>
       </tr>`
@@ -440,40 +471,15 @@ async function loadHistory() {
     .join('');
 }
 
-// ---------------- LEAVE (employee) ----------------
-document.getElementById('form-leave').onsubmit = async (e) => {
-  e.preventDefault();
-  try {
-    const fd = new FormData();
-    fd.append('type', document.getElementById('leave-type').value);
-    fd.append('startDate', document.getElementById('leave-start').value);
-    fd.append('endDate', document.getElementById('leave-end').value);
-    fd.append('reason', document.getElementById('leave-reason').value);
-    const proofFile = document.getElementById('leave-proof').files[0];
-    if (proofFile) fd.append('proof', proofFile);
-    await api('/leave', { method: 'POST', body: fd });
-    toast('Pengajuan berhasil dikirim');
-    e.target.reset();
-    loadMyLeave();
-  } catch (err) {
-    toast(err.message, true);
-  }
+document.getElementById('btn-toggle-filter-emp').onclick = () => {
+  document.getElementById('filter-panel-emp').classList.toggle('hidden');
 };
-
-async function loadMyLeave() {
-  const { rows } = await api('/leave/mine');
-  const tbody = document.querySelector('#table-leave-mine tbody');
-  tbody.innerHTML = rows
-    .map(
-      (r) => `<tr>
-        <td>${r.start_date} s.d. ${r.end_date}</td>
-        <td>${r.type}</td>
-        <td>${r.reason}</td>
-        <td><span class="badge ${r.status === 'approved' ? 'ok' : r.status === 'rejected' ? 'warn' : 'pending'}">${r.status}</span></td>
-      </tr>`
-    )
-    .join('');
-}
+document.getElementById('btn-apply-filter-emp').onclick = loadHistory;
+document.getElementById('btn-reset-filter-emp').onclick = () => {
+  document.getElementById('filter-emp-start').value = '';
+  document.getElementById('filter-emp-end').value = '';
+  loadHistory();
+};
 
 // ---------------- PROFIL (karyawan) ----------------
 function loadProfile() {
@@ -518,9 +524,10 @@ document.querySelectorAll('#view-admin .tab-btn').forEach((btn) => {
     document.querySelectorAll('#view-admin .tab-content').forEach((c) => c.classList.add('hidden'));
     document.getElementById('atab-' + btn.dataset.atab).classList.remove('hidden');
     if (btn.dataset.atab === 'karyawan') loadEmployees();
-    if (btn.dataset.atab === 'izin-admin') loadLeaveAdmin();
+    if (btn.dataset.atab === 'riwayat-admin') loadFilterEmployeeOptions();
     if (btn.dataset.atab === 'lokasi') loadLocations();
     if (btn.dataset.atab === 'jabatan') loadPositions();
+    if (btn.dataset.atab === 'hari-libur') loadHolidays();
     if (btn.dataset.atab === 'aktivitas') loadActivity();
     if (btn.dataset.atab === 'ringkasan') loadSummary();
     if (btn.dataset.atab === 'profil-admin') loadAdminProfile();
@@ -531,7 +538,6 @@ async function loadSummary() {
   const s = await api('/admin/summary');
   document.getElementById('sum-total').textContent = s.totalEmployees;
   document.getElementById('sum-checkin').textContent = s.checkedInToday;
-  document.getElementById('sum-pending').textContent = s.pendingLeave;
   document.getElementById('sum-fake').textContent = s.fakeGpsToday;
   document.getElementById('sum-review').textContent = s.pendingReview;
 }
@@ -543,11 +549,36 @@ const REVIEW_STATUS_BADGE = {
   ok: '',
 };
 
-async function loadAttendanceAdmin() {
+function currentAdminFilterQs() {
   const start = document.getElementById('filter-start').value;
   const end = document.getElementById('filter-end').value;
-  const qs = start && end ? `?start=${start}&end=${end}` : '';
-  const { rows } = await api('/admin/attendance' + qs);
+  const employeeId = document.getElementById('filter-employee').value;
+  const params = new URLSearchParams();
+  if (start && end) {
+    params.set('start', start);
+    params.set('end', end);
+  }
+  if (employeeId) params.set('employeeId', employeeId);
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+}
+
+async function loadFilterEmployeeOptions() {
+  if (!state.employees.length) {
+    const { rows } = await api('/admin/employees');
+    state.employees = rows;
+  }
+  const select = document.getElementById('filter-employee');
+  const current = select.value;
+  select.innerHTML =
+    '<option value="">Semua Karyawan</option>' +
+    state.employees.map((e) => `<option value="${e.id}">${e.name}</option>`).join('');
+  select.value = current;
+  loadAttendanceAdmin();
+}
+
+async function loadAttendanceAdmin() {
+  const { rows } = await api('/admin/attendance' + currentAdminFilterQs());
   const tbody = document.querySelector('#table-attendance-admin tbody');
   tbody.innerHTML = rows
     .map(
@@ -556,10 +587,11 @@ async function loadAttendanceAdmin() {
         <td>${r.name}</td>
         <td>${r.nik || r.nip || '-'}</td>
         <td>${r.type === 'masuk' ? 'Masuk' : 'Pulang'}</td>
+        <td>${r.location_label || '-'}</td>
         <td>${r.note}</td>
         <td>${r.device_info || '-'}</td>
         <td>${r.ip_address || '-'}</td>
-        <td>${r.fake_gps_flag ? `<span class="badge warn" title="${(r.fake_gps_reasons || '').replace(/"/g, '&quot;')}">Terindikasi (skor ${r.risk_score})</span>` : '<span class="badge ok">Normal</span>'}</td>
+        <td>${r.fake_gps_flag ? `<span class="badge warn" title="${(r.fake_gps_reasons || '').replace(/"/g, '&quot;')}">Terindikasi</span>` : '<span class="badge ok">Normal</span>'}</td>
         <td>
           ${REVIEW_STATUS_BADGE[r.review_status] || ''}
           ${
@@ -588,12 +620,18 @@ async function loadAttendanceAdmin() {
     };
   });
 }
+document.getElementById('btn-toggle-filter-admin').onclick = () => {
+  document.getElementById('filter-panel-admin').classList.toggle('hidden');
+};
 document.getElementById('btn-filter-attendance').onclick = loadAttendanceAdmin;
+document.getElementById('btn-reset-filter-admin').onclick = () => {
+  document.getElementById('filter-start').value = '';
+  document.getElementById('filter-end').value = '';
+  document.getElementById('filter-employee').value = '';
+  loadAttendanceAdmin();
+};
 document.getElementById('btn-export-attendance').onclick = () => {
-  const start = document.getElementById('filter-start').value;
-  const end = document.getElementById('filter-end').value;
-  const qs = start && end ? `?start=${start}&end=${end}` : '';
-  window.location.href = '/api/admin/export/attendance' + qs;
+  window.location.href = '/api/admin/export/attendance' + currentAdminFilterQs();
 };
 document.getElementById('btn-export-employees').onclick = () => {
   window.location.href = '/api/admin/export/employees';
@@ -627,35 +665,6 @@ document.getElementById('import-employees-file').addEventListener('change', asyn
   }
 });
 
-async function loadLeaveAdmin() {
-  const { rows } = await api('/leave/all');
-  const tbody = document.querySelector('#table-leave-admin tbody');
-  tbody.innerHTML = rows
-    .map(
-      (r) => `<tr>
-        <td>${r.name}</td>
-        <td>${r.type}</td>
-        <td>${r.start_date} s.d. ${r.end_date}</td>
-        <td>${r.reason}</td>
-        <td>${r.proof_path ? `<a href="/uploads/${r.proof_path}" target="_blank">Lihat</a>` : '-'}</td>
-        <td><span class="badge ${r.status === 'approved' ? 'ok' : r.status === 'rejected' ? 'warn' : 'pending'}">${r.status}</span></td>
-        <td>${
-          r.status === 'pending'
-            ? `<button data-id="${r.id}" data-action="approved" class="btn-review btn-secondary">Setuju</button>
-               <button data-id="${r.id}" data-action="rejected" class="btn-review btn-secondary">Tolak</button>`
-            : '-'
-        }</td>
-      </tr>`
-    )
-    .join('');
-  document.querySelectorAll('.btn-review').forEach((btn) => {
-    btn.onclick = async () => {
-      await api(`/leave/${btn.dataset.id}/review`, { method: 'POST', body: JSON.stringify({ status: btn.dataset.action }) });
-      loadLeaveAdmin();
-    };
-  });
-}
-
 // ---------------- ADMIN: EMPLOYEES ----------------
 async function loadAdminRefData() {
   const [{ rows: positions }, { rows: locations }] = await Promise.all([api('/admin/positions'), api('/admin/locations')]);
@@ -673,6 +682,7 @@ async function loadAdminRefData() {
 
 async function loadEmployees() {
   const { rows } = await api('/admin/employees');
+  state.employees = rows;
   const tbody = document.querySelector('#table-employees tbody');
   tbody.innerHTML = rows
     .map(
@@ -844,6 +854,66 @@ document.getElementById('form-position').onsubmit = async (e) => {
     toast(err.message, true);
   }
 };
+
+// ---------------- ADMIN: HARI LIBUR ----------------
+async function loadHolidays() {
+  const { rows } = await api('/admin/holidays');
+  const tbody = document.querySelector('#table-holidays tbody');
+  tbody.innerHTML = rows
+    .map(
+      (h) => `<tr>
+        <td>${h.date}</td>
+        <td>${h.name || '-'}</td>
+        <td><button class="btn-secondary btn-delete-holiday" data-date="${h.date}">Hapus</button></td>
+      </tr>`
+    )
+    .join('');
+  document.querySelectorAll('.btn-delete-holiday').forEach((btn) => {
+    btn.onclick = async () => {
+      await api(`/admin/holidays/${btn.dataset.date}`, { method: 'DELETE' });
+      loadHolidays();
+    };
+  });
+}
+
+document.getElementById('form-holiday').onsubmit = async (e) => {
+  e.preventDefault();
+  try {
+    await api('/admin/holidays', {
+      method: 'POST',
+      body: JSON.stringify({
+        date: document.getElementById('holiday-date').value,
+        name: document.getElementById('holiday-name').value,
+      }),
+    });
+    e.target.reset();
+    toast('Tanggal merah ditambahkan');
+    loadHolidays();
+  } catch (err) {
+    toast(err.message, true);
+  }
+};
+
+document.getElementById('btn-import-holidays').onclick = () => {
+  document.getElementById('import-holidays-file').click();
+};
+document.getElementById('import-holidays-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const result = await api('/admin/holidays/import', { method: 'POST', body: fd });
+    let msg = `Import selesai: ${result.inserted} tanggal merah ditambahkan/diperbarui`;
+    if (result.errors && result.errors.length) msg += `, ${result.errors.length} baris gagal`;
+    toast(msg);
+    loadHolidays();
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    e.target.value = '';
+  }
+});
 
 // ---------------- ADMIN: ACTIVITY LOG ----------------
 const ACTIVITY_LABELS = {

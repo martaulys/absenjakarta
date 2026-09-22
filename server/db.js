@@ -57,20 +57,6 @@ CREATE TABLE IF NOT EXISTS attendance (
   fake_gps_reasons TEXT
 );
 
-CREATE TABLE IF NOT EXISTS leave_requests (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  employee_id INTEGER NOT NULL REFERENCES employees(id),
-  type TEXT NOT NULL, -- 'izin' | 'sakit'
-  start_date TEXT NOT NULL,
-  end_date TEXT NOT NULL,
-  reason TEXT NOT NULL,
-  proof_path TEXT,
-  status TEXT NOT NULL DEFAULT 'pending', -- pending | approved | rejected
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  reviewed_by INTEGER REFERENCES employees(id),
-  reviewed_at TEXT
-);
-
 CREATE TABLE IF NOT EXISTS activity_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   employee_id INTEGER REFERENCES employees(id),
@@ -78,7 +64,15 @@ CREATE TABLE IF NOT EXISTS activity_log (
   detail TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS holidays (
+  date TEXT PRIMARY KEY, -- 'YYYY-MM-DD'
+  name TEXT
+);
 `);
+
+// Fitur Izin/Sakit dihapus - webapp ini hanya untuk absen masuk/pulang
+db.exec('DROP TABLE IF EXISTS leave_requests');
 
 // Migrations for columns added after initial release
 const attendanceColumns = db.prepare("PRAGMA table_info(attendance)").all().map((c) => c.name);
@@ -100,6 +94,12 @@ if (!attendanceColumns.includes('reviewed_by')) {
 }
 if (!attendanceColumns.includes('reviewed_at')) {
   db.exec('ALTER TABLE attendance ADD COLUMN reviewed_at TEXT');
+}
+if (!attendanceColumns.includes('location_id')) {
+  db.exec('ALTER TABLE attendance ADD COLUMN location_id INTEGER REFERENCES locations(id)');
+}
+if (!attendanceColumns.includes('location_label')) {
+  db.exec('ALTER TABLE attendance ADD COLUMN location_label TEXT');
 }
 
 // Seed default data on first run
