@@ -55,7 +55,7 @@ async function buildAttendanceWorkbook({ rows, baseUrl }) {
     { header: 'Latitude', key: 'lat', width: 14 },
     { header: 'Longitude', key: 'lng', width: 14 },
     { header: 'Bukti Foto', key: 'bukti', width: 14 },
-    { header: 'Status', key: 'status', width: 16 },
+    { header: 'Status', key: 'status', width: 40 },
   ];
   styleHeaderRow(sheet.getRow(1));
   sheet.autoFilter = { from: 'A1', to: 'K1' };
@@ -91,7 +91,7 @@ async function buildAttendanceWorkbook({ rows, baseUrl }) {
         excelRow.getCell('date').fill = FILL_RED;
         excelRow.getCell('jamPulang').fill = FILL_RED;
       }
-      if (r.status === 'Terindikasi') {
+      if (r.isFlagged) {
         excelRow.getCell('status').fill = FILL_RED;
       } else if (r.status === 'Normal') {
         excelRow.getCell('status').fill = FILL_OK;

@@ -13,6 +13,18 @@ const state = {
   deactivatingEmployeeId: null,
 };
 
+function indicationCell(flagged, reasonsRaw) {
+  if (!flagged) return '<span class="badge ok">Normal</span>';
+  const reasons = (reasonsRaw || '')
+    .split(';')
+    .map((r) => r.trim())
+    .filter(Boolean);
+  const detail = reasons.length
+    ? `<ul class="reason-detail">${reasons.map((r) => `<li>${r}</li>`).join('')}</ul>`
+    : '';
+  return `<span class="badge warn">Terindikasi</span>${detail}`;
+}
+
 function toast(msg, isError) {
   const el = document.getElementById('toast');
   el.textContent = msg;
@@ -465,7 +477,7 @@ async function loadHistory() {
         <td>${r.type === 'masuk' ? 'Masuk' : 'Pulang'}</td>
         <td>${r.location_label || '-'}</td>
         <td>${r.note}</td>
-        <td>${r.fake_gps_flag ? '<span class="badge warn">Terindikasi</span>' : '<span class="badge ok">Normal</span>'}</td>
+        <td>${indicationCell(r.fake_gps_flag, r.fake_gps_reasons)}</td>
       </tr>`
     )
     .join('');
@@ -591,7 +603,7 @@ async function loadAttendanceAdmin() {
         <td>${r.note}</td>
         <td>${r.device_info || '-'}</td>
         <td>${r.ip_address || '-'}</td>
-        <td>${r.fake_gps_flag ? `<span class="badge warn" title="${(r.fake_gps_reasons || '').replace(/"/g, '&quot;')}">Terindikasi</span>` : '<span class="badge ok">Normal</span>'}</td>
+        <td>${indicationCell(r.fake_gps_flag, r.fake_gps_reasons)}</td>
         <td>
           ${REVIEW_STATUS_BADGE[r.review_status] || ''}
           ${

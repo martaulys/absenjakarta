@@ -482,6 +482,13 @@ function buildAttendanceMatrix({ start, end, employeeId }) {
       const entry = byEmpDate[`${emp.id}_${date}`] || { masuk: null, pulang: null };
       const primary = entry.masuk || entry.pulang;
       const flagged = (entry.masuk && entry.masuk.fake_gps_flag) || (entry.pulang && entry.pulang.fake_gps_flag);
+      const reasons = Array.from(
+        new Set(
+          [entry.masuk, entry.pulang]
+            .filter((r) => r && r.fake_gps_flag && r.fake_gps_reasons)
+            .flatMap((r) => r.fake_gps_reasons.split(';').map((s) => s.trim()).filter(Boolean))
+        )
+      );
       rows.push({
         name: emp.name,
         nik: emp.nik || emp.nip || '-',
@@ -494,7 +501,8 @@ function buildAttendanceMatrix({ start, end, employeeId }) {
         lat: primary ? primary.lat : null,
         lng: primary ? primary.lng : null,
         photoPath: primary ? primary.photo_path : null,
-        status: primary ? (flagged ? 'Terindikasi' : 'Normal') : '-',
+        status: primary ? (flagged ? `Terindikasi: ${reasons.join('; ')}` : 'Normal') : '-',
+        isFlagged: flagged,
       });
     });
   });
