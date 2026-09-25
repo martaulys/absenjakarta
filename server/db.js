@@ -39,6 +39,8 @@ CREATE TABLE IF NOT EXISTS employees (
   photo_path TEXT,
   active INTEGER NOT NULL DEFAULT 1,
   exit_date TEXT,
+  tier TEXT NOT NULL DEFAULT 'staff', -- 'atasan' | 'staff'
+  supervisor_id INTEGER REFERENCES employees(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -52,7 +54,7 @@ CREATE TABLE IF NOT EXISTS attendance (
   accuracy REAL,
   distance_from_location REAL,
   photo_path TEXT NOT NULL,
-  note TEXT NOT NULL,
+  note TEXT NOT NULL DEFAULT '',
   fake_gps_flag INTEGER NOT NULL DEFAULT 0,
   fake_gps_reasons TEXT
 );
@@ -100,6 +102,20 @@ if (!attendanceColumns.includes('location_id')) {
 }
 if (!attendanceColumns.includes('location_label')) {
   db.exec('ALTER TABLE attendance ADD COLUMN location_label TEXT');
+}
+if (!attendanceColumns.includes('address')) {
+  db.exec('ALTER TABLE attendance ADD COLUMN address TEXT');
+}
+if (!attendanceColumns.includes('review_note')) {
+  db.exec('ALTER TABLE attendance ADD COLUMN review_note TEXT');
+}
+
+const employeeColumns = db.prepare('PRAGMA table_info(employees)').all().map((c) => c.name);
+if (!employeeColumns.includes('tier')) {
+  db.exec("ALTER TABLE employees ADD COLUMN tier TEXT NOT NULL DEFAULT 'staff'");
+}
+if (!employeeColumns.includes('supervisor_id')) {
+  db.exec('ALTER TABLE employees ADD COLUMN supervisor_id INTEGER REFERENCES employees(id)');
 }
 
 // Seed default data on first run

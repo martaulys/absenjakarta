@@ -11,6 +11,7 @@ const state = {
   employees: [],
   editingEmployeeId: null,
   deactivatingEmployeeId: null,
+  reviewContext: null,
 };
 
 function indicationCell(flagged, reasonsRaw) {
@@ -24,6 +25,35 @@ function indicationCell(flagged, reasonsRaw) {
     : '';
   return `<span class="badge warn">Terindikasi</span>${detail}`;
 }
+
+// ---------------- REVIEW NOTE MODAL (shared: admin & Atasan) ----------------
+function openReviewModal({ endpoint, action, onDone }) {
+  state.reviewContext = { endpoint, action, onDone };
+  document.getElementById('review-note-title').textContent =
+    action === 'verified' ? 'Verifikasi Absen' : 'Tolak Absen';
+  document.getElementById('review-note-text').value = '';
+  hideFieldError('review-note-error');
+  document.getElementById('modal-review-note').classList.remove('hidden');
+}
+document.getElementById('btn-cancel-review-note').onclick = () => {
+  document.getElementById('modal-review-note').classList.add('hidden');
+  state.reviewContext = null;
+};
+document.getElementById('btn-confirm-review-note').onclick = async () => {
+  const note = document.getElementById('review-note-text').value.trim();
+  if (!note) return showFieldError('review-note-error');
+  const ctx = state.reviewContext;
+  if (!ctx) return;
+  try {
+    await api(ctx.endpoint, { method: 'POST', body: JSON.stringify({ status: ctx.action, note }) });
+    document.getElementById('modal-review-note').classList.add('hidden');
+    state.reviewContext = null;
+    toast(ctx.action === 'verified' ? 'Absen ditandai terverifikasi' : 'Absen ditandai ditolak');
+    if (ctx.onDone) ctx.onDone();
+  } catch (err) {
+    toast(err.message, true);
+  }
+};
 
 function toast(msg, isError) {
   const el = document.getElementById('toast');
@@ -140,6 +170,9 @@ async function enterApp() {
     loadAbsenLocations();
     startClock();
     updateAbsenButtonsState();
+    if (state.employee.tier === 'atasan') {
+      document.getElementById('tab-btn-verifikasi').classList.remove('hidden');
+    }
   }
 }
 
@@ -161,6 +194,7 @@ document.querySelectorAll('#view-employee .tab-btn').forEach((btn) => {
     document.querySelectorAll('#view-employee .tab-content').forEach((c) => c.classList.add('hidden'));
     document.getElementById('tab-' + btn.dataset.tab).classList.remove('hidden');
     if (btn.dataset.tab === 'profil') loadProfile();
+    if (btn.dataset.tab === 'verifikasi') loadPendingReview();
   };
 });
 
@@ -320,18 +354,11 @@ async function loadAbsenLocations() {
     '<option value="lain-lain">Lain-lain</option>';
 }
 
-document.getElementById('absen-location').addEventListener('change', (e) => {
-  const isLainLain = e.target.value === 'lain-lain';
-  document.getElementById('absen-note-wrap').classList.toggle('hidden', !isLainLain);
-  if (!isLainLain) document.getElementById('absen-note').value = '';
-  updateAbsenButtonsState();
-});
+document.getElementById('absen-location').addEventListener('change', updateAbsenButtonsState);
 
 function updateAbsenButtonsState() {
   const locationChoice = document.getElementById('absen-location').value;
-  const isLainLain = locationChoice === 'lain-lain';
-  const note = document.getElementById('absen-note').value.trim();
-  const ready = !!state.capturedBlob && !!state.currentPosition && !!locationChoice && (!isLainLain || !!note);
+  const ready = !!state.capturedBlob && !!state.currentPosition && !!locationChoice;
   document.getElementById('btn-absen-masuk').disabled = !ready;
   document.getElementById('btn-absen-pulang').disabled = !ready;
 }
@@ -404,9 +431,7 @@ async function submitAbsen(type) {
     if (!state.currentPosition) return toast('Lokasi belum terdeteksi', true);
     const locationId = document.getElementById('absen-location').value;
     if (!locationId) return toast('Lokasi wajib dipilih', true);
-    const isLainLain = locationId === 'lain-lain';
     const note = document.getElementById('absen-note').value;
-    if (isLainLain && !note.trim()) return toast('Catatan wajib diisi untuk lokasi Lain-lain', true);
 
     const fd = new FormData();
     fd.append('photo', state.capturedBlob, 'absen.jpg');
@@ -416,6 +441,7 @@ async function submitAbsen(type) {
     fd.append('accuracy', state.currentPosition.accuracy);
     fd.append('locationId', locationId);
     fd.append('note', note);
+    fd.append('address', state.locationAddress || '');
     fd.append('geoApiSuspicious', state.geoApiSuspicious ? 'true' : 'false');
     if (state.secondPosition) {
       fd.append('lat2', state.secondPosition.lat);
@@ -425,7 +451,7 @@ async function submitAbsen(type) {
 
     const result = await api('/attendance/check-in', { method: 'POST', body: fd });
     if (result.flagged) {
-      toast('Absen tersimpan, namun terindikasi lokasi mencurigakan dan perlu verifikasi admin: ' + result.reasons.join('; '), true);
+      toast('Absen tersimpan, namun terindikasi lokasi mencurigakan dan perlu verifikasi Atasan: ' + result.reasons.join('; '), true);
     } else {
       toast('Absen berhasil disimpan');
     }
@@ -446,7 +472,6 @@ function resetAbsenForm() {
   state.geoApiSuspicious = false;
   document.getElementById('absen-note').value = '';
   document.getElementById('absen-location').value = '';
-  document.getElementById('absen-note-wrap').classList.add('hidden');
   document.getElementById('captured-photo').classList.add('hidden');
   document.getElementById('btn-retake').classList.add('hidden');
   document.getElementById('btn-start-camera').classList.remove('hidden');
@@ -493,6 +518,41 @@ document.getElementById('btn-reset-filter-emp').onclick = () => {
   loadHistory();
 };
 
+// ---------------- VERIFIKASI (Atasan) ----------------
+async function loadPendingReview() {
+  const { rows } = await api('/attendance/pending-review');
+  const tbody = document.querySelector('#table-verifikasi tbody');
+  tbody.innerHTML = rows
+    .map(
+      (r) => `<tr>
+        <td>${r.timestamp}</td>
+        <td>${r.name}</td>
+        <td>${r.type === 'masuk' ? 'Masuk' : 'Pulang'}</td>
+        <td>${r.location_label || '-'}</td>
+        <td>${indicationCell(r.fake_gps_flag, r.fake_gps_reasons)}</td>
+        <td>${reviewStatusCell(r)}</td>
+        <td>
+          ${
+            r.review_status === 'needs_review'
+              ? `<button data-id="${r.id}" data-action="verified" class="btn-review-atasan btn-secondary">Verifikasi</button>
+                 <button data-id="${r.id}" data-action="rejected" class="btn-review-atasan btn-secondary">Tolak</button>`
+              : '-'
+          }
+        </td>
+      </tr>`
+    )
+    .join('');
+  document.querySelectorAll('.btn-review-atasan').forEach((btn) => {
+    btn.onclick = () => {
+      openReviewModal({
+        endpoint: `/attendance/review/${btn.dataset.id}`,
+        action: btn.dataset.action,
+        onDone: loadPendingReview,
+      });
+    };
+  });
+}
+
 // ---------------- PROFIL (karyawan) ----------------
 function loadProfile() {
   const emp = state.employee;
@@ -500,6 +560,8 @@ function loadProfile() {
   document.getElementById('profile-email').value = emp.email || '';
   document.getElementById('profile-nik').value = emp.nik || '-';
   document.getElementById('profile-position').value = emp.positionName || '-';
+  document.getElementById('profile-tier').value = emp.tier === 'atasan' ? 'Atasan' : 'Staff';
+  document.getElementById('profile-supervisor').value = emp.supervisorName || '-';
   document.getElementById('profile-location').value = emp.locationName || '-';
   document.getElementById('profile-join-date').value = formatDateID(emp.joinDate);
 }
@@ -561,6 +623,14 @@ const REVIEW_STATUS_BADGE = {
   ok: '',
 };
 
+function reviewStatusCell(r) {
+  const badge = REVIEW_STATUS_BADGE[r.review_status] || '';
+  if ((r.review_status === 'verified' || r.review_status === 'rejected') && r.review_note) {
+    return `${badge}<div class="reason-detail">Catatan: ${r.review_note}</div>`;
+  }
+  return badge;
+}
+
 function currentAdminFilterQs() {
   const start = document.getElementById('filter-start').value;
   const end = document.getElementById('filter-end').value;
@@ -605,7 +675,7 @@ async function loadAttendanceAdmin() {
         <td>${r.ip_address || '-'}</td>
         <td>${indicationCell(r.fake_gps_flag, r.fake_gps_reasons)}</td>
         <td>
-          ${REVIEW_STATUS_BADGE[r.review_status] || ''}
+          ${reviewStatusCell(r)}
           ${
             r.review_status === 'needs_review'
               ? `<button data-id="${r.id}" data-action="verified" class="btn-review-att btn-secondary">Verifikasi</button>
@@ -617,18 +687,15 @@ async function loadAttendanceAdmin() {
     )
     .join('');
   document.querySelectorAll('.btn-review-att').forEach((btn) => {
-    btn.onclick = async () => {
-      try {
-        await api(`/admin/attendance/${btn.dataset.id}/review`, {
-          method: 'POST',
-          body: JSON.stringify({ status: btn.dataset.action }),
-        });
-        toast(btn.dataset.action === 'verified' ? 'Absen ditandai terverifikasi' : 'Absen ditandai ditolak');
-        loadAttendanceAdmin();
-        loadSummary();
-      } catch (err) {
-        toast(err.message, true);
-      }
+    btn.onclick = () => {
+      openReviewModal({
+        endpoint: `/admin/attendance/${btn.dataset.id}/review`,
+        action: btn.dataset.action,
+        onDone: () => {
+          loadAttendanceAdmin();
+          loadSummary();
+        },
+      });
     };
   });
 }
@@ -679,18 +746,29 @@ document.getElementById('import-employees-file').addEventListener('change', asyn
 
 // ---------------- ADMIN: EMPLOYEES ----------------
 async function loadAdminRefData() {
-  const [{ rows: positions }, { rows: locations }] = await Promise.all([api('/admin/positions'), api('/admin/locations')]);
+  const [{ rows: positions }, { rows: locations }, { rows: atasanList }] = await Promise.all([
+    api('/admin/positions'),
+    api('/admin/locations'),
+    api('/admin/atasan-list'),
+  ]);
   state.positions = positions;
   state.locations = locations;
+  state.atasanList = atasanList;
   const posSelect = document.getElementById('emp-form-position');
   posSelect.innerHTML = positions.map((p) => `<option value="${p.id}">${p.name}</option>`).join('');
   const empLocSelect = document.getElementById('emp-form-location');
   empLocSelect.innerHTML = locations.map((l) => `<option value="${l.id}">${l.name}</option>`).join('');
+  const supSelect = document.getElementById('emp-form-supervisor');
+  supSelect.innerHTML = '<option value="">Tidak ada</option>' + atasanList.map((a) => `<option value="${a.id}">${a.name}</option>`).join('');
   const admPosSelect = document.getElementById('adm-profile-position');
   admPosSelect.innerHTML = positions.map((p) => `<option value="${p.id}">${p.name}</option>`).join('');
   const admLocSelect = document.getElementById('adm-profile-location');
   admLocSelect.innerHTML = locations.map((l) => `<option value="${l.id}">${l.name}</option>`).join('');
 }
+
+document.getElementById('emp-form-tier').addEventListener('change', (e) => {
+  document.getElementById('emp-form-supervisor-wrap').classList.toggle('hidden', e.target.value !== 'staff');
+});
 
 async function loadEmployees() {
   const { rows } = await api('/admin/employees');
@@ -703,6 +781,8 @@ async function loadEmployees() {
         <td>${e.email}</td>
         <td>${e.nik || e.nip || '-'}</td>
         <td>${e.position_name || '-'}</td>
+        <td>${e.tier === 'atasan' ? 'Atasan' : 'Staff'}</td>
+        <td>${e.supervisor_name || '-'}</td>
         <td>${e.location_name || '-'}</td>
         <td>${e.active ? '<span class="badge ok">Aktif</span>' : `<span class="badge warn">Non-aktif (${e.exit_date || ''})</span>`}</td>
         <td>
@@ -765,6 +845,10 @@ async function openEmployeeForm(emp) {
   document.getElementById('emp-form-role').value = emp ? emp.role : 'employee';
   if (emp && emp.position_id) document.getElementById('emp-form-position').value = emp.position_id;
   if (emp && emp.location_id) document.getElementById('emp-form-location').value = emp.location_id;
+  const tier = emp && emp.tier === 'atasan' ? 'atasan' : 'staff';
+  document.getElementById('emp-form-tier').value = tier;
+  document.getElementById('emp-form-supervisor-wrap').classList.toggle('hidden', tier !== 'staff');
+  document.getElementById('emp-form-supervisor').value = emp && emp.supervisor_id ? emp.supervisor_id : '';
   document.getElementById('employee-form-card').classList.remove('hidden');
 }
 
@@ -783,6 +867,8 @@ document.getElementById('form-employee').onsubmit = async (e) => {
     fd.append('role', document.getElementById('emp-form-role').value);
     fd.append('positionId', document.getElementById('emp-form-position').value);
     fd.append('locationId', document.getElementById('emp-form-location').value);
+    fd.append('tier', document.getElementById('emp-form-tier').value);
+    fd.append('supervisorId', document.getElementById('emp-form-supervisor').value);
     if (password) fd.append('password', password);
     const photoFile = document.getElementById('emp-form-photo').files[0];
     if (photoFile) fd.append('photo', photoFile);

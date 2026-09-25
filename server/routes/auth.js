@@ -22,6 +22,9 @@ function publicEmployee(emp) {
     locationName: emp.location_name || null,
     photoPath: emp.photo_path,
     active: !!emp.active,
+    tier: emp.tier || 'staff',
+    supervisorId: emp.supervisor_id || null,
+    supervisorName: emp.supervisor_name || null,
     joinDate: emp.created_at ? emp.created_at.split(' ')[0] : null,
   };
 }
@@ -29,10 +32,11 @@ function publicEmployee(emp) {
 function getEmployeeWithRefs(id) {
   return db
     .prepare(
-      `SELECT e.*, p.name AS position_name, l.name AS location_name
+      `SELECT e.*, p.name AS position_name, l.name AS location_name, s.name AS supervisor_name
        FROM employees e
        LEFT JOIN positions p ON p.id = e.position_id
        LEFT JOIN locations l ON l.id = e.location_id
+       LEFT JOIN employees s ON s.id = e.supervisor_id
        WHERE e.id = ?`
     )
     .get(id);

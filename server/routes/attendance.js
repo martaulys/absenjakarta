@@ -34,7 +34,7 @@ router.get('/locations', requireAuth, (req, res) => {
 
 router.post('/check-in', requireAuth, upload.single('photo'), async (req, res) => {
   try {
-    const { type, lat, lng, accuracy, note, locationId, geoApiSuspicious, lat2, lng2, sampleElapsedMs } = req.body;
+    const { type, lat, lng, accuracy, note, address, locationId, geoApiSuspicious, lat2, lng2, sampleElapsedMs } = req.body;
     if (!['masuk', 'pulang'].includes(type)) {
       return res.status(400).json({ error: 'Jenis absen tidak valid' });
     }
@@ -44,16 +44,12 @@ router.post('/check-in', requireAuth, upload.single('photo'), async (req, res) =
     if (lat === undefined || lng === undefined) {
       return res.status(400).json({ error: 'Lokasi GPS wajib tersedia' });
     }
-
-    const locations = db.prepare('SELECT * FROM locations').all();
-    const selectedLocation = locationId ? locations.find((l) => String(l.id) === String(locationId)) || null : null;
-    const isLainLain = !selectedLocation;
     if (locationId === undefined || locationId === '') {
       return res.status(400).json({ error: 'Lokasi wajib dipilih' });
     }
-    if (isLainLain && (!note || !note.trim())) {
-      return res.status(400).json({ error: 'Catatan wajib diisi untuk lokasi Lain-lain' });
-    }
+
+    const locations = db.prepare('SELECT * FROM locations').all();
+    const selectedLocation = locationId ? locations.find((l) => String(l.id) === String(locationId)) || null : null;
 
     const emp = db.prepare('SELECT * FROM employees WHERE id = ?').get(req.session.employeeId);
     const lastAttendance = db
@@ -120,8 +116,8 @@ router.post('/check-in', requireAuth, upload.single('photo'), async (req, res) =
 
     const result = db
       .prepare(
-        `INSERT INTO attendance (employee_id, type, timestamp, lat, lng, accuracy, distance_from_location, photo_path, note, fake_gps_flag, fake_gps_reasons, device_info, ip_address, risk_score, review_status, location_id, location_label)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO attendance (employee_id, type, timestamp, lat, lng, accuracy, distance_from_location, photo_path, note, fake_gps_flag, fake_gps_reasons, device_info, ip_address, risk_score, review_status, location_id, location_label, address)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         emp.id,
@@ -140,7 +136,8 @@ router.post('/check-in', requireAuth, upload.single('photo'), async (req, res) =
         riskScore,
         reviewStatus,
         selectedLocation ? selectedLocation.id : null,
-        locationLabel
+        locationLabel,
+        (address || '').trim() || null
       );
 
     res.json({
@@ -153,6 +150,50 @@ router.post('/check-in', requireAuth, upload.single('photo'), async (req, res) =
     console.error(err);
     res.status(500).json({ error: err.message || 'Gagal menyimpan absensi' });
   }
+});
+
+// Antrian verifikasi untuk Atasan: absen anak buah (supervisor_id = user login) yang perlu/​sudah ditinjau
+router.get('/pending-review', requireAuth, (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT a.*, e.name, e.nik, e.nip FROM attendance a
+       JOIN employees e ON e.id = a.employee_id
+       WHERE e.supervisor_id = ?
+       ORDER BY (a.review_status = 'needs_review') DESC, a.timestamp DESC
+       LIMIT 200`
+    )
+    .all(req.session.employeeId);
+  res.json({ rows });
+});
+
+router.post('/review/:id', requireAuth, (req, res) => {
+  const { status, note } = req.body;
+  if (!['verified', 'rejected'].includes(status)) {
+    return res.status(400).json({ error: 'Status verifikasi tidak valid' });
+  }
+  if (!note || !note.trim()) {
+    return res.status(400).json({ error: 'Catatan alasan wajib diisi oleh Atasan' });
+  }
+  const row = db
+    .prepare(
+      `SELECT a.*, e.supervisor_id, e.name FROM attendance a JOIN employees e ON e.id = a.employee_id WHERE a.id = ?`
+    )
+    .get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'Data absen tidak ditemukan' });
+  if (row.supervisor_id !== req.session.employeeId) {
+    return res.status(403).json({ error: 'Anda bukan Atasan dari karyawan ini' });
+  }
+
+  db.prepare(
+    'UPDATE attendance SET review_status = ?, reviewed_by = ?, reviewed_at = ?, review_note = ? WHERE id = ?'
+  ).run(status, req.session.employeeId, nowJakartaSql(), note.trim(), req.params.id);
+  db.prepare('INSERT INTO activity_log (employee_id, action, detail, created_at) VALUES (?, ?, ?, ?)').run(
+    req.session.employeeId,
+    status === 'verified' ? 'verify_attendance' : 'reject_attendance',
+    `Absen #${row.id} (${row.name}, ${row.timestamp}) ditandai ${status === 'verified' ? 'terverifikasi' : 'ditolak'} oleh Atasan. Catatan: ${note.trim()}`,
+    nowJakartaSql()
+  );
+  res.json({ ok: true });
 });
 
 router.get('/history', requireAuth, (req, res) => {

@@ -52,13 +52,12 @@ async function buildAttendanceWorkbook({ rows, baseUrl }) {
     { header: 'Jam Absen Pulang', key: 'jamPulang', width: 15 },
     { header: 'Lokasi', key: 'lokasi', width: 20 },
     { header: 'Catatan', key: 'catatan', width: 28 },
-    { header: 'Latitude', key: 'lat', width: 14 },
-    { header: 'Longitude', key: 'lng', width: 14 },
+    { header: 'Alamat', key: 'alamat', width: 34 },
     { header: 'Bukti Foto', key: 'bukti', width: 14 },
     { header: 'Status', key: 'status', width: 40 },
   ];
   styleHeaderRow(sheet.getRow(1));
-  sheet.autoFilter = { from: 'A1', to: 'K1' };
+  sheet.autoFilter = { from: 'A1', to: 'J1' };
 
   rows.forEach((r) => {
     const excelRow = sheet.addRow({
@@ -69,12 +68,11 @@ async function buildAttendanceWorkbook({ rows, baseUrl }) {
       jamPulang: r.jamPulang || '',
       lokasi: r.lokasi || '-',
       catatan: r.catatan || '-',
-      lat: r.lat != null ? r.lat : '-',
-      lng: r.lng != null ? r.lng : '-',
+      alamat: r.alamat || '-',
       bukti: '',
       status: r.status || '-',
     });
-    proofLink(sheet, `J${excelRow.number}`, baseUrl, r.photoPath, 'Lihat Foto');
+    proofLink(sheet, `I${excelRow.number}`, baseUrl, r.photoPath, 'Lihat Foto');
     styleDataRow(excelRow);
 
     if (r.isNonWorking) {

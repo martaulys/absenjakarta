@@ -55,23 +55,23 @@ router.get('/attendance', (req, res) => {
 });
 
 router.post('/attendance/:id/review', (req, res) => {
-  const { status } = req.body; // 'verified' | 'rejected'
+  const { status, note } = req.body; // 'verified' | 'rejected'
   if (!['verified', 'rejected'].includes(status)) {
     return res.status(400).json({ error: 'Status verifikasi tidak valid' });
+  }
+  if (!note || !note.trim()) {
+    return res.status(400).json({ error: 'Catatan alasan wajib diisi' });
   }
   const row = db.prepare('SELECT * FROM attendance WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Data absen tidak ditemukan' });
 
-  db.prepare('UPDATE attendance SET review_status = ?, reviewed_by = ?, reviewed_at = ? WHERE id = ?').run(
-    status,
-    req.session.employeeId,
-    nowJakartaSql(),
-    req.params.id
-  );
+  db.prepare(
+    'UPDATE attendance SET review_status = ?, reviewed_by = ?, reviewed_at = ?, review_note = ? WHERE id = ?'
+  ).run(status, req.session.employeeId, nowJakartaSql(), note.trim(), req.params.id);
   db.prepare('INSERT INTO activity_log (employee_id, action, detail, created_at) VALUES (?, ?, ?, ?)').run(
     req.session.employeeId,
     status === 'verified' ? 'verify_attendance' : 'reject_attendance',
-    `Absen #${row.id} (karyawan ID ${row.employee_id}, ${row.timestamp}) ditandai ${status === 'verified' ? 'terverifikasi' : 'ditolak'}`,
+    `Absen #${row.id} (karyawan ID ${row.employee_id}, ${row.timestamp}) ditandai ${status === 'verified' ? 'terverifikasi' : 'ditolak'} oleh Admin. Catatan: ${note.trim()}`,
     nowJakartaSql()
   );
   res.json({ ok: true });
@@ -81,18 +81,23 @@ router.post('/attendance/:id/review', (req, res) => {
 router.get('/employees', (req, res) => {
   const rows = db
     .prepare(
-      `SELECT e.*, p.name AS position_name, l.name AS location_name
+      `SELECT e.*, p.name AS position_name, l.name AS location_name, s.name AS supervisor_name
        FROM employees e
        LEFT JOIN positions p ON p.id = e.position_id
        LEFT JOIN locations l ON l.id = e.location_id
+       LEFT JOIN employees s ON s.id = e.supervisor_id
        ORDER BY e.active DESC, e.name ASC`
     )
     .all();
   res.json({ rows: rows.map(({ password_hash, ...rest }) => rest) });
 });
 
+router.get('/atasan-list', (req, res) => {
+  res.json({ rows: db.prepare("SELECT id, name FROM employees WHERE tier = 'atasan' AND active = 1 ORDER BY name").all() });
+});
+
 router.post('/employees', upload.single('photo'), (req, res) => {
-  const { nik, name, email, password, role, positionId, locationId } = req.body;
+  const { nik, name, email, password, role, positionId, locationId, tier, supervisorId } = req.body;
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'Nama, email, dan password wajib diisi' });
   }
@@ -100,10 +105,11 @@ router.post('/employees', upload.single('photo'), (req, res) => {
     const photoPath = req.file ? path.join('profile', req.file.filename).replace(/\\/g, '/') : null;
     const hash = bcrypt.hashSync(password, 10);
     const defaultLocation = db.prepare('SELECT id FROM locations LIMIT 1').get();
+    const empTier = tier === 'atasan' ? 'atasan' : 'staff';
     const result = db
       .prepare(
-        `INSERT INTO employees (nik, name, email, password_hash, role, position_id, location_id, photo_path, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO employees (nik, name, email, password_hash, role, position_id, location_id, photo_path, tier, supervisor_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         nik || null,
@@ -114,6 +120,8 @@ router.post('/employees', upload.single('photo'), (req, res) => {
         positionId || null,
         locationId || (defaultLocation ? defaultLocation.id : null),
         photoPath,
+        empTier,
+        empTier === 'staff' && supervisorId ? supervisorId : null,
         nowJakartaSql()
       );
     res.json({ id: result.lastInsertRowid });
@@ -126,15 +134,16 @@ router.post('/employees', upload.single('photo'), (req, res) => {
 });
 
 router.put('/employees/:id', upload.single('photo'), (req, res) => {
-  const { nik, name, email, role, positionId, locationId, password } = req.body;
+  const { nik, name, email, role, positionId, locationId, password, tier, supervisorId } = req.body;
   const existing = db.prepare('SELECT * FROM employees WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Karyawan tidak ditemukan' });
 
   const photoPath = req.file ? path.join('profile', req.file.filename).replace(/\\/g, '/') : existing.photo_path;
   const passwordHash = password ? bcrypt.hashSync(password, 10) : existing.password_hash;
+  const empTier = tier !== undefined ? (tier === 'atasan' ? 'atasan' : 'staff') : existing.tier;
 
   db.prepare(
-    `UPDATE employees SET nik = ?, name = ?, email = ?, role = ?, position_id = ?, location_id = ?, photo_path = ?, password_hash = ?
+    `UPDATE employees SET nik = ?, name = ?, email = ?, role = ?, position_id = ?, location_id = ?, photo_path = ?, password_hash = ?, tier = ?, supervisor_id = ?
      WHERE id = ?`
   ).run(
     nik || null,
@@ -145,6 +154,8 @@ router.put('/employees/:id', upload.single('photo'), (req, res) => {
     locationId !== undefined ? locationId || null : existing.location_id,
     photoPath,
     passwordHash,
+    empTier,
+    empTier === 'staff' && supervisorId ? supervisorId : null,
     req.params.id
   );
   res.json({ ok: true });
@@ -498,8 +509,7 @@ function buildAttendanceMatrix({ start, end, employeeId }) {
         jamPulang: entry.pulang ? entry.pulang.timestamp.slice(11, 16) : '',
         lokasi: primary ? primary.location_label || '-' : '-',
         catatan: primary ? primary.note || '-' : '-',
-        lat: primary ? primary.lat : null,
-        lng: primary ? primary.lng : null,
+        alamat: primary ? primary.address || '-' : '-',
         photoPath: primary ? primary.photo_path : null,
         status: primary ? (flagged ? `Terindikasi: ${reasons.join('; ')}` : 'Normal') : '-',
         isFlagged: flagged,
