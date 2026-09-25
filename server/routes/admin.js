@@ -92,8 +92,8 @@ router.get('/employees', (req, res) => {
   res.json({ rows: rows.map(({ password_hash, ...rest }) => rest) });
 });
 
-router.get('/atasan-list', (req, res) => {
-  res.json({ rows: db.prepare("SELECT id, name FROM employees WHERE tier = 'atasan' AND active = 1 ORDER BY name").all() });
+router.get('/supervisor-list', (req, res) => {
+  res.json({ rows: db.prepare("SELECT id, name FROM employees WHERE tier = 'supervisor' AND active = 1 ORDER BY name").all() });
 });
 
 router.post('/employees', upload.single('photo'), (req, res) => {
@@ -105,7 +105,7 @@ router.post('/employees', upload.single('photo'), (req, res) => {
     const photoPath = req.file ? path.join('profile', req.file.filename).replace(/\\/g, '/') : null;
     const hash = bcrypt.hashSync(password, 10);
     const defaultLocation = db.prepare('SELECT id FROM locations LIMIT 1').get();
-    const empTier = tier === 'atasan' ? 'atasan' : 'staff';
+    const empTier = tier === 'supervisor' ? 'supervisor' : 'staff';
     const result = db
       .prepare(
         `INSERT INTO employees (nik, name, email, password_hash, role, position_id, location_id, photo_path, tier, supervisor_id, created_at)
@@ -140,7 +140,7 @@ router.put('/employees/:id', upload.single('photo'), (req, res) => {
 
   const photoPath = req.file ? path.join('profile', req.file.filename).replace(/\\/g, '/') : existing.photo_path;
   const passwordHash = password ? bcrypt.hashSync(password, 10) : existing.password_hash;
-  const empTier = tier !== undefined ? (tier === 'atasan' ? 'atasan' : 'staff') : existing.tier;
+  const empTier = tier !== undefined ? (tier === 'supervisor' ? 'supervisor' : 'staff') : existing.tier;
 
   db.prepare(
     `UPDATE employees SET nik = ?, name = ?, email = ?, role = ?, position_id = ?, location_id = ?, photo_path = ?, password_hash = ?, tier = ?, supervisor_id = ?

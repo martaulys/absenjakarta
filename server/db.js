@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS employees (
   photo_path TEXT,
   active INTEGER NOT NULL DEFAULT 1,
   exit_date TEXT,
-  tier TEXT NOT NULL DEFAULT 'staff', -- 'atasan' | 'staff'
+  tier TEXT NOT NULL DEFAULT 'staff', -- Jabatan: 'supervisor' | 'staff'
   supervisor_id INTEGER REFERENCES employees(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -117,6 +117,9 @@ if (!employeeColumns.includes('tier')) {
 if (!employeeColumns.includes('supervisor_id')) {
   db.exec('ALTER TABLE employees ADD COLUMN supervisor_id INTEGER REFERENCES employees(id)');
 }
+
+// Jabatan (org rank) dulu memakai istilah 'atasan', sekarang 'supervisor' - migrasi data lama
+db.exec("UPDATE employees SET tier = 'supervisor' WHERE tier = 'atasan'");
 
 // Seed default data on first run
 const positionCount = db.prepare('SELECT COUNT(*) AS c FROM positions').get().c;

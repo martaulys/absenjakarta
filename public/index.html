@@ -140,9 +140,9 @@
       <label>Nama</label><input type="text" id="profile-name" disabled />
       <label>Email</label><input type="email" id="profile-email" disabled />
       <label>NIK</label><input type="text" id="profile-nik" disabled />
-      <label>Jabatan</label><input type="text" id="profile-position" disabled />
-      <label>Posisi</label><input type="text" id="profile-tier" disabled />
-      <label>Atasan</label><input type="text" id="profile-supervisor" disabled />
+      <label>Jobtitle</label><input type="text" id="profile-position" disabled />
+      <label>Jabatan</label><input type="text" id="profile-tier" disabled />
+      <label>Supervisor</label><input type="text" id="profile-supervisor" disabled />
       <label>Lokasi</label><input type="text" id="profile-location" disabled />
       <label>Tanggal Masuk</label><input type="text" id="profile-join-date" disabled />
     </div>
@@ -176,7 +176,7 @@
     <button class="tab-btn" data-atab="riwayat-admin">Riwayat</button>
     <button class="tab-btn" data-atab="karyawan">Karyawan</button>
     <button class="tab-btn" data-atab="lokasi">Lokasi</button>
-    <button class="tab-btn" data-atab="jabatan">Jabatan</button>
+    <button class="tab-btn" data-atab="jabatan">Jobtitle</button>
     <button class="tab-btn" data-atab="hari-libur">Hari Libur</button>
     <button class="tab-btn" data-atab="aktivitas">Aktivitas</button>
     <button class="tab-btn" data-atab="profil-admin">Profil</button>
@@ -222,9 +222,9 @@
       <button id="btn-export-employees" class="btn-secondary">Unduh Excel</button>
       <button id="btn-import-employees" class="btn-secondary">Import Excel</button>
       <input type="file" id="import-employees-file" accept=".xlsx" class="hidden" />
-      <p class="field-hint">Format file: sheet "Karyawan" (Email, Password, Nama, NIK, Jabatan, Tanggal Masuk, Status, Tanggal Keluar) dan sheet "Jabatan" (daftar nama jabatan).</p>
+      <p class="field-hint">Format file: sheet "Karyawan" (Email, Password, Nama, NIK, Jabatan/Jobtitle, Tanggal Masuk, Status, Tanggal Keluar) dan sheet "Jabatan" (daftar nama jobtitle).</p>
       <table class="table" id="table-employees">
-        <thead><tr><th>Nama</th><th>Email</th><th>NIK/NIP</th><th>Jabatan</th><th>Posisi</th><th>Atasan</th><th>Lokasi</th><th>Status</th><th>Aksi</th></tr></thead>
+        <thead><tr><th>Nama</th><th>Email</th><th>NIK/NIP</th><th>Jobtitle</th><th>Jabatan</th><th>Supervisor</th><th>Lokasi</th><th>Status</th><th>Aksi</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -245,15 +245,15 @@
         <p id="emp-form-password-rule-error" class="field-error hidden">Tidak sesuai ketentuan.</p>
         <label>Role</label>
         <select id="emp-form-role"><option value="employee">Karyawan</option><option value="admin">Admin</option></select>
-        <label>Jabatan</label>
+        <label>Jobtitle</label>
         <select id="emp-form-position"></select>
-        <label>Posisi</label>
+        <label>Jabatan</label>
         <select id="emp-form-tier">
           <option value="staff">Staff</option>
-          <option value="atasan">Atasan</option>
+          <option value="supervisor">Supervisor</option>
         </select>
         <div id="emp-form-supervisor-wrap">
-          <label>Atasan</label>
+          <label>Supervisor</label>
           <select id="emp-form-supervisor">
             <option value="">Tidak ada</option>
           </select>
@@ -289,10 +289,10 @@
 
   <div id="atab-jabatan" class="tab-content hidden">
     <div class="card">
-      <h2>Kelola Jabatan</h2>
+      <h2>Kelola Jobtitle</h2>
       <form id="form-position">
-        <label>Nama Jabatan</label><input type="text" id="pos-name" required />
-        <button type="submit" class="btn-primary">Tambah Jabatan</button>
+        <label>Nama Jobtitle</label><input type="text" id="pos-name" required />
+        <button type="submit" class="btn-primary">Tambah Jobtitle</button>
       </form>
       <table class="table" id="table-positions">
         <thead><tr><th>Nama</th><th>Aksi</th></tr></thead>
@@ -336,7 +336,7 @@
         <label>Nama</label><input type="text" id="adm-profile-name" required />
         <label>Email</label><input type="email" id="adm-profile-email" required />
         <label>NIK</label><input type="text" id="adm-profile-nik" />
-        <label>Jabatan</label>
+        <label>Jobtitle</label>
         <select id="adm-profile-position"></select>
         <label>Lokasi</label>
         <select id="adm-profile-location"></select>

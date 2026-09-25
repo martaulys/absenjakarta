@@ -26,7 +26,7 @@ function indicationCell(flagged, reasonsRaw) {
   return `<span class="badge warn">Terindikasi</span>${detail}`;
 }
 
-// ---------------- REVIEW NOTE MODAL (shared: admin & Atasan) ----------------
+// ---------------- REVIEW NOTE MODAL (shared: admin & Supervisor) ----------------
 function openReviewModal({ endpoint, action, onDone }) {
   state.reviewContext = { endpoint, action, onDone };
   document.getElementById('review-note-title').textContent =
@@ -170,7 +170,7 @@ async function enterApp() {
     loadAbsenLocations();
     startClock();
     updateAbsenButtonsState();
-    if (state.employee.tier === 'atasan') {
+    if (state.employee.tier === 'supervisor') {
       document.getElementById('tab-btn-verifikasi').classList.remove('hidden');
     }
   }
@@ -451,7 +451,7 @@ async function submitAbsen(type) {
 
     const result = await api('/attendance/check-in', { method: 'POST', body: fd });
     if (result.flagged) {
-      toast('Absen tersimpan, namun terindikasi lokasi mencurigakan dan perlu verifikasi Atasan: ' + result.reasons.join('; '), true);
+      toast('Absen tersimpan, namun terindikasi lokasi mencurigakan dan perlu verifikasi Supervisor: ' + result.reasons.join('; '), true);
     } else {
       toast('Absen berhasil disimpan');
     }
@@ -518,7 +518,7 @@ document.getElementById('btn-reset-filter-emp').onclick = () => {
   loadHistory();
 };
 
-// ---------------- VERIFIKASI (Atasan) ----------------
+// ---------------- VERIFIKASI (Supervisor) ----------------
 async function loadPendingReview() {
   const { rows } = await api('/attendance/pending-review');
   const tbody = document.querySelector('#table-verifikasi tbody');
@@ -534,15 +534,15 @@ async function loadPendingReview() {
         <td>
           ${
             r.review_status === 'needs_review'
-              ? `<button data-id="${r.id}" data-action="verified" class="btn-review-atasan btn-secondary">Verifikasi</button>
-                 <button data-id="${r.id}" data-action="rejected" class="btn-review-atasan btn-secondary">Tolak</button>`
+              ? `<button data-id="${r.id}" data-action="verified" class="btn-review-supervisor btn-secondary">Verifikasi</button>
+                 <button data-id="${r.id}" data-action="rejected" class="btn-review-supervisor btn-secondary">Tolak</button>`
               : '-'
           }
         </td>
       </tr>`
     )
     .join('');
-  document.querySelectorAll('.btn-review-atasan').forEach((btn) => {
+  document.querySelectorAll('.btn-review-supervisor').forEach((btn) => {
     btn.onclick = () => {
       openReviewModal({
         endpoint: `/attendance/review/${btn.dataset.id}`,
@@ -560,7 +560,7 @@ function loadProfile() {
   document.getElementById('profile-email').value = emp.email || '';
   document.getElementById('profile-nik').value = emp.nik || '-';
   document.getElementById('profile-position').value = emp.positionName || '-';
-  document.getElementById('profile-tier').value = emp.tier === 'atasan' ? 'Atasan' : 'Staff';
+  document.getElementById('profile-tier').value = emp.tier === 'supervisor' ? 'Supervisor' : 'Staff';
   document.getElementById('profile-supervisor').value = emp.supervisorName || '-';
   document.getElementById('profile-location').value = emp.locationName || '-';
   document.getElementById('profile-join-date').value = formatDateID(emp.joinDate);
@@ -746,20 +746,20 @@ document.getElementById('import-employees-file').addEventListener('change', asyn
 
 // ---------------- ADMIN: EMPLOYEES ----------------
 async function loadAdminRefData() {
-  const [{ rows: positions }, { rows: locations }, { rows: atasanList }] = await Promise.all([
+  const [{ rows: positions }, { rows: locations }, { rows: supervisorList }] = await Promise.all([
     api('/admin/positions'),
     api('/admin/locations'),
-    api('/admin/atasan-list'),
+    api('/admin/supervisor-list'),
   ]);
   state.positions = positions;
   state.locations = locations;
-  state.atasanList = atasanList;
+  state.supervisorList = supervisorList;
   const posSelect = document.getElementById('emp-form-position');
   posSelect.innerHTML = positions.map((p) => `<option value="${p.id}">${p.name}</option>`).join('');
   const empLocSelect = document.getElementById('emp-form-location');
   empLocSelect.innerHTML = locations.map((l) => `<option value="${l.id}">${l.name}</option>`).join('');
   const supSelect = document.getElementById('emp-form-supervisor');
-  supSelect.innerHTML = '<option value="">Tidak ada</option>' + atasanList.map((a) => `<option value="${a.id}">${a.name}</option>`).join('');
+  supSelect.innerHTML = '<option value="">Tidak ada</option>' + supervisorList.map((a) => `<option value="${a.id}">${a.name}</option>`).join('');
   const admPosSelect = document.getElementById('adm-profile-position');
   admPosSelect.innerHTML = positions.map((p) => `<option value="${p.id}">${p.name}</option>`).join('');
   const admLocSelect = document.getElementById('adm-profile-location');
@@ -781,7 +781,7 @@ async function loadEmployees() {
         <td>${e.email}</td>
         <td>${e.nik || e.nip || '-'}</td>
         <td>${e.position_name || '-'}</td>
-        <td>${e.tier === 'atasan' ? 'Atasan' : 'Staff'}</td>
+        <td>${e.tier === 'supervisor' ? 'Supervisor' : 'Staff'}</td>
         <td>${e.supervisor_name || '-'}</td>
         <td>${e.location_name || '-'}</td>
         <td>${e.active ? '<span class="badge ok">Aktif</span>' : `<span class="badge warn">Non-aktif (${e.exit_date || ''})</span>`}</td>
@@ -845,7 +845,7 @@ async function openEmployeeForm(emp) {
   document.getElementById('emp-form-role').value = emp ? emp.role : 'employee';
   if (emp && emp.position_id) document.getElementById('emp-form-position').value = emp.position_id;
   if (emp && emp.location_id) document.getElementById('emp-form-location').value = emp.location_id;
-  const tier = emp && emp.tier === 'atasan' ? 'atasan' : 'staff';
+  const tier = emp && emp.tier === 'supervisor' ? 'supervisor' : 'staff';
   document.getElementById('emp-form-tier').value = tier;
   document.getElementById('emp-form-supervisor-wrap').classList.toggle('hidden', tier !== 'staff');
   document.getElementById('emp-form-supervisor').value = emp && emp.supervisor_id ? emp.supervisor_id : '';

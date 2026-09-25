@@ -152,7 +152,7 @@ router.post('/check-in', requireAuth, upload.single('photo'), async (req, res) =
   }
 });
 
-// Antrian verifikasi untuk Atasan: absen anak buah (supervisor_id = user login) yang perlu/​sudah ditinjau
+// Antrian verifikasi untuk Supervisor: absen anak buah (supervisor_id = user login) yang perlu/​sudah ditinjau
 router.get('/pending-review', requireAuth, (req, res) => {
   const rows = db
     .prepare(
@@ -172,7 +172,7 @@ router.post('/review/:id', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Status verifikasi tidak valid' });
   }
   if (!note || !note.trim()) {
-    return res.status(400).json({ error: 'Catatan alasan wajib diisi oleh Atasan' });
+    return res.status(400).json({ error: 'Catatan alasan wajib diisi oleh Supervisor' });
   }
   const row = db
     .prepare(
@@ -181,7 +181,7 @@ router.post('/review/:id', requireAuth, (req, res) => {
     .get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Data absen tidak ditemukan' });
   if (row.supervisor_id !== req.session.employeeId) {
-    return res.status(403).json({ error: 'Anda bukan Atasan dari karyawan ini' });
+    return res.status(403).json({ error: 'Anda bukan Supervisor dari karyawan ini' });
   }
 
   db.prepare(
@@ -190,7 +190,7 @@ router.post('/review/:id', requireAuth, (req, res) => {
   db.prepare('INSERT INTO activity_log (employee_id, action, detail, created_at) VALUES (?, ?, ?, ?)').run(
     req.session.employeeId,
     status === 'verified' ? 'verify_attendance' : 'reject_attendance',
-    `Absen #${row.id} (${row.name}, ${row.timestamp}) ditandai ${status === 'verified' ? 'terverifikasi' : 'ditolak'} oleh Atasan. Catatan: ${note.trim()}`,
+    `Absen #${row.id} (${row.name}, ${row.timestamp}) ditandai ${status === 'verified' ? 'terverifikasi' : 'ditolak'} oleh Supervisor. Catatan: ${note.trim()}`,
     nowJakartaSql()
   );
   res.json({ ok: true });
