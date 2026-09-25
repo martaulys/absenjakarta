@@ -52,7 +52,7 @@ async function buildAttendanceWorkbook({ rows, baseUrl }) {
     { header: 'Jam Absen Pulang', key: 'jamPulang', width: 15 },
     { header: 'Lokasi', key: 'lokasi', width: 20 },
     { header: 'Catatan', key: 'catatan', width: 28 },
-    { header: 'Alamat', key: 'alamat', width: 34 },
+    { header: 'Lokasi Terdeteksi', key: 'lokasiTerdeteksi', width: 34 },
     { header: 'Bukti Foto', key: 'bukti', width: 14 },
     { header: 'Status', key: 'status', width: 40 },
   ];
@@ -68,7 +68,7 @@ async function buildAttendanceWorkbook({ rows, baseUrl }) {
       jamPulang: r.jamPulang || '',
       lokasi: r.lokasi || '-',
       catatan: r.catatan || '-',
-      alamat: r.alamat || '-',
+      lokasiTerdeteksi: r.lokasiTerdeteksi || '-',
       bukti: '',
       status: r.status || '-',
     });

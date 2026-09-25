@@ -509,7 +509,9 @@ function buildAttendanceMatrix({ start, end, employeeId }) {
         jamPulang: entry.pulang ? entry.pulang.timestamp.slice(11, 16) : '',
         lokasi: primary ? primary.location_label || '-' : '-',
         catatan: primary ? primary.note || '-' : '-',
-        alamat: primary ? primary.address || '-' : '-',
+        // Hanya diisi saat terindikasi fake-GPS: area asli hasil reverse-geocoding tempat
+        // karyawan absen, untuk dibandingkan dengan lokasi kantor yang diklaim (kolom Lokasi).
+        lokasiTerdeteksi: primary && flagged ? primary.address || '-' : '-',
         photoPath: primary ? primary.photo_path : null,
         status: primary ? (flagged ? `Terindikasi: ${reasons.join('; ')}` : 'Normal') : '-',
         isFlagged: flagged,
